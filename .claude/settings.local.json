@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm --filter @worksheet/api exec tsc --noEmit)"
+      "Bash(pnpm --filter @worksheet/api exec tsc --noEmit)",
+      "Bash(pnpm --filter @worksheet/api test)"
     ]
   }
 }

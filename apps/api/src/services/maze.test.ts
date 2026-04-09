@@ -81,33 +81,40 @@ describe('generateMaze - full connectivity', () => {
 
 describe('mazeToSvg', () => {
   it('returns a string starting with <svg and ending with </svg>', () => {
-    const svg = mazeToSvg(generateMaze('easy'))
+    const { svg } = mazeToSvg(generateMaze('easy'))
     expect(svg.trim()).toMatch(/^<svg /)
     expect(svg.trim()).toMatch(/<\/svg>$/)
   })
 
   it('medium maze SVG is wider than easy maze SVG', () => {
     const getWidth = (s: string) => Number(s.match(/width="(\d+)"/)?.[1])
-    expect(getWidth(mazeToSvg(generateMaze('medium')))).toBeGreaterThan(
-      getWidth(mazeToSvg(generateMaze('easy')))
+    expect(getWidth(mazeToSvg(generateMaze('medium')).svg)).toBeGreaterThan(
+      getWidth(mazeToSvg(generateMaze('easy')).svg)
     )
   })
 
-  it('contains Start and Finish text labels', () => {
-    const svg = mazeToSvg(generateMaze('easy'))
-    expect(svg).toContain('Start')
-    expect(svg).toContain('Finish')
-  })
-
-  it('contains at least two white stroke lines for entrance and exit gaps', () => {
-    const svg = mazeToSvg(generateMaze('easy'))
+  it('contains a white stroke line for the entrance gap', () => {
+    const { svg } = mazeToSvg(generateMaze('easy'))
     const whiteLines = [...svg.matchAll(/stroke="white"/g)]
-    expect(whiteLines.length).toBeGreaterThanOrEqual(2)
+    expect(whiteLines.length).toBeGreaterThanOrEqual(1)
   })
 
   it('contains a white-filled background rect for the maze grid', () => {
-    const svg = mazeToSvg(generateMaze('easy'))
+    const { svg } = mazeToSvg(generateMaze('easy'))
     expect(svg).toContain('fill="white"')
     expect(svg).toContain('<rect')
+  })
+
+  it('returns svgW and svgH dimensions', () => {
+    const { svgW, svgH } = mazeToSvg(generateMaze('easy'))
+    expect(svgW).toBeGreaterThan(0)
+    expect(svgH).toBeGreaterThan(0)
+  })
+
+  it('returns entryGap and clearing coordinates', () => {
+    const { entryGap, clearing } = mazeToSvg(generateMaze('easy'))
+    expect(entryGap.svgX).toBeGreaterThanOrEqual(0)
+    expect(entryGap.svgY).toBeGreaterThan(0)
+    expect(clearing.svgSize).toBeGreaterThan(0)
   })
 })

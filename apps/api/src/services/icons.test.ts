@@ -33,31 +33,42 @@ describe('fetchOrGenerateIcon - placeholder fallback', () => {
     expect(icon.url).toMatch(/^data:image\/svg\+xml;base64,/)
     expect(icon.label).toBe('unique-interest-xyz')
   })
+})
 
-  it('returns placeholder with cached:false when referenceImageDataUrl is provided but no API key', async () => {
+describe('fetchOrGenerateIcon - reference image passthrough', () => {
+  it('returns the reference image data URL directly without any API call', async () => {
     vi.stubEnv('FAL_API_KEY', '')
-    const icon = await fetchOrGenerateIcon('my-pet', 'data:image/jpeg;base64,/9j/fake')
-    expect(icon.url).toMatch(/^data:image\/svg\+xml;base64,/)
+    const refUrl = 'data:image/jpeg;base64,/9j/fakeimagedata'
+    const icon = await fetchOrGenerateIcon('my-pet', refUrl)
+    expect(icon.url).toBe(refUrl)
     expect(icon.cached).toBe(false)
+    expect(icon.label).toBe('my-pet')
+  })
+
+  it('uses the reference image even when a FAL_API_KEY is set', async () => {
+    vi.stubEnv('FAL_API_KEY', 'fake-key')
+    const refUrl = 'data:image/png;base64,iVBORw0KGgoAAAANS'
+    const icon = await fetchOrGenerateIcon('dragons', refUrl)
+    expect(icon.url).toBe(refUrl)
   })
 })
 
 describe('fetchOrGenerateIcon - fal.ai error handling', () => {
-  it('falls back to placeholder when fetch throws during image upload', async () => {
+  it('falls back to placeholder when fetch throws during text-to-image', async () => {
     vi.stubEnv('FAL_API_KEY', 'fake-key')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')))
-    const icon = await fetchOrGenerateIcon('dragons', 'data:image/jpeg;base64,abc')
+    const icon = await fetchOrGenerateIcon('dragons')
     expect(icon.url).toMatch(/^data:image\/svg\+xml;base64,/)
   })
 
-  it('falls back to placeholder when upload initiate returns non-ok status', async () => {
+  it('falls back to placeholder when text-to-image returns non-ok status', async () => {
     vi.stubEnv('FAL_API_KEY', 'fake-key')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => 'Internal Server Error',
     }))
-    const icon = await fetchOrGenerateIcon('unicorns', 'data:image/jpeg;base64,abc')
+    const icon = await fetchOrGenerateIcon('unicorns')
     expect(icon.url).toMatch(/^data:image\/svg\+xml;base64,/)
   })
 })
