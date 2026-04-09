@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fetchOrGenerateIcon, clearCacheForTesting } from './icons'
+import { fetchOrGenerateIcon, clearCacheForTesting } from './icons.js'
 
 afterEach(() => {
   vi.unstubAllEnvs()

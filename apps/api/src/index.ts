@@ -3,10 +3,10 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { zValidator } from '@hono/zod-validator'
 import { WorksheetSpec } from '@worksheet/shared'
-import { generateMaze, mazeToSvg } from './services/maze'
-import { fetchOrGenerateIcon } from './services/icons'
-import { buildPdf } from './services/pdf'
-import logger from './lib/logger'
+import { generateMaze, mazeToSvg } from './services/maze.js'
+import { fetchOrGenerateIcon } from './services/icons.js'
+import { buildPdf } from './services/pdf.js'
+import logger from './lib/logger.js'
 
 const app = new Hono()
 
