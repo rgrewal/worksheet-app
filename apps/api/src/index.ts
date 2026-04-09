@@ -79,7 +79,7 @@ app.post(
       const pdfBytes = await buildPdf({ spec, icon, activitySvg, activityLabels })
       logger.info({ bytes: pdfBytes.length }, 'PDF render complete')
 
-      return c.newResponse(pdfBytes, 200, {
+      return c.newResponse(new Uint8Array(pdfBytes), 200, {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${spec.interest}-${spec.activity}.pdf"`,
         'Cache-Control': 'public, max-age=3600',
