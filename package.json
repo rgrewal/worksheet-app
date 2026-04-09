@@ -1,0 +1,16 @@
+{
+  "name": "worksheet-app",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "build": "pnpm --filter '@worksheet/shared' build && pnpm --parallel --filter './apps/*' build",
+    "typecheck": "pnpm --recursive --parallel exec tsc --noEmit",
+    "test": "pnpm -r run test",
+    "test:api": "pnpm --filter @worksheet/api run test",
+    "test:frontend": "pnpm --filter @worksheet/frontend run test",
+    "test:shared": "pnpm --filter @worksheet/shared run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
