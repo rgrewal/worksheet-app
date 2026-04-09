@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.output/
+
+# Vite
+.vite/
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log
+
+# Environment variables — never commit these
+.env
+.env.local
+.env.*.local
+
+# Keep the example file so new devs know what's needed
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Generated PDFs (transient output, not source)
+*.pdf
+
+# TypeScript
+*.tsbuildinfo
