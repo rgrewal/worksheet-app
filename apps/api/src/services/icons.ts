@@ -1,5 +1,5 @@
 import type { Icon } from '@worksheet/shared'
-import logger from '../lib/logger'
+import logger from '../lib/logger.js'
 
 const memoryCache = new Map<string, string>()
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateMaze, mazeToSvg } from './maze'
+import { generateMaze, mazeToSvg } from './maze.js'
 import type { DifficultyLevel } from '@worksheet/shared'
 
 describe.each([

@@ -3,8 +3,8 @@ import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import type { WorksheetSpec, Icon } from '@worksheet/shared'
-import logger from '../lib/logger'
-import { getCornerImage } from './cornerImages'
+import logger from '../lib/logger.js'
+import { getCornerImage } from './cornerImages.js'
 
 interface GapPosition {
   svgX: number
