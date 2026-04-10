@@ -93,9 +93,8 @@ app.post(
 
 export default app
 
-if (process.env.NODE_ENV !== 'production') {
-  const { serve } = await import('@hono/node-server')
-  serve({ fetch: app.fetch, port: 3001 }, () => {
-    console.log('API running at http://localhost:3001')
-  })
-}
+const { serve } = await import('@hono/node-server')
+const port = Number(process.env.PORT ?? 3001)
+serve({ fetch: app.fetch, port }, () => {
+  logger.info(`API running on port ${port}`)
+})
