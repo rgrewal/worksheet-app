@@ -6,9 +6,17 @@ This file provides guidance to Claude Code when working with this repository. It
 
 **worksheet-app** generates personalized printable learning worksheets for children based on their interests. It is both a real product and a portfolio piece demonstrating AI/LLM integration.
 
-- **Demo deadline: April 22, 2025**
-- **Current priority: stable ops (GitHub → Render deploy → R2 asset backup)**
+- **Demo deadline: April 22, 2026**
+- **Current priority: fix known issues (UI, layout, maze rendering, icon distortion, ICON_SIZE)**
 - **Stack was chosen deliberately new-to-author** to demonstrate modern JS/TS ecosystem learning
+
+## Live URLs
+
+| | URL |
+|---|---|
+| Frontend | https://worksheet-app.pages.dev |
+| API | https://worksheet-app-f9kt.onrender.com |
+| Health check | https://worksheet-app-f9kt.onrender.com/health |
 
 ## Commands
 
@@ -42,15 +50,21 @@ cp apps/api/.env.example apps/api/.env
 ### Local (dev)
 `apps/api/.env`:
 - `FAL_API_KEY` — from fal.ai (app works without it, falls back to placeholder SVG)
-- `FRONTEND_URL` — e.g. `http://localhost:5173`
+- `FRONTEND_URL` — `http://localhost:5173`
 - `NODE_ENV=development`
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` — Cloudflare R2 credentials (once set up)
 
 `apps/frontend/.env`:
 - `VITE_API_URL=http://localhost:3001`
 
-### Production (Render)
-All env vars above are set as Render environment variables — never committed to git. `NODE_ENV=production`.
+### Production
+| Service | Env var | Value |
+|---|---|---|
+| Render | `NODE_ENV` | `production` |
+| Render | `FAL_API_KEY` | fal.ai key |
+| Render | `FRONTEND_URL` | `https://worksheet-app.pages.dev` (no trailing slash) |
+| Render | `PORT` | set automatically by Render |
+| Cloudflare Pages | `VITE_API_URL` | `https://worksheet-app-f9kt.onrender.com` |
 
 ## Architecture
 
@@ -63,6 +77,14 @@ Pnpm monorepo with three packages:
   - `services/icons.ts` — In-memory cache keyed on normalized interest string. Tries: reference image → fal.ai img2img (Flux Canny), then text → fal.ai text-to-image, then placeholder SVG.
   - `services/pdf.ts` — PDFKit assembles title + icon + activity SVG into a LETTER-size PDF. Uses stream-based buffer collection (PDFKit doesn't support async/await directly).
   - `services/storage.ts` — (pending) Cloudflare R2 upload/download via `@aws-sdk/client-s3`.
+
+## Build notes
+
+- `tsc` only compiles `.ts` files — assets must be copied manually
+- Font file is copied as part of the API build: `tsc && cp -r src/fonts dist/fonts`
+- All internal imports must use `.js` extensions (ESM requirement) e.g. `import { foo } from './bar.js'`
+- Server binds to `process.env.PORT ?? 3001` — Render injects `PORT` automatically
+- `FRONTEND_URL` in Render must have no trailing slash or CORS will fail
 
 ## Known issues (fix before adding new features)
 
@@ -78,15 +100,15 @@ Pnpm monorepo with three packages:
 2. Add a `case` to the `switch(spec.activity)` in `apps/api/src/index.ts`
 3. Add the new value to `ActivityType` in `packages/shared/src/types.ts`
 
-## Infrastructure decisions
+## Infrastructure
 
 **Decided against Cloudflare Workers for the API** — PDFKit depends on Node.js APIs (`fs`, `Buffer`) and would require a rewrite to `pdf-lib`. Not worth the risk before the demo. Decision can be revisited post-launch.
 
 | Concern | Solution | Status |
 |---|---|---|
-| Source control | GitHub (private repo) | Pending |
-| API hosting | Render (Node, push-to-deploy) | Pending |
-| Frontend hosting | Cloudflare Pages | Pending |
+| Source control | GitHub (private repo) | ✅ Done |
+| API hosting | Render (Node, push-to-deploy) | ✅ Done |
+| Frontend hosting | Cloudflare Pages | ✅ Done |
 | Image/PDF blob storage | Cloudflare R2 (via S3 SDK) | Pending |
 | Icon cache (persistent) | Cloudflare KV | Post-demo |
 | Worksheet metadata/history | Cloudflare D1 or Turso | Post-demo |
@@ -95,24 +117,25 @@ Pnpm monorepo with three packages:
 ## Deployment
 
 ### Frontend → Cloudflare Pages
-```bash
-pnpm --filter @worksheet/frontend build
-# Upload apps/frontend/dist via Cloudflare dashboard or wrangler pages deploy
-```
+- Auto-deploys on push to `main`
+- Root directory: `apps/frontend`
+- Build command: `pnpm --filter @worksheet/frontend build`
+- Build output directory: `dist`
+- Node version: `20`
 
 ### API → Render
-- Connect GitHub repo in Render dashboard
-- Build command: `pnpm install && pnpm --filter @worksheet/api build`
-- Start command: `node apps/api/dist/index.js` (adjust to actual entry point)
-- Set all env vars in Render dashboard — never in code
 - Auto-deploys on push to `main`
+- Root directory: `apps/api`
+- Build command: `cd ../.. && pnpm install && pnpm --filter @worksheet/api build`
+- Start command: `node dist/index.js`
+- Instance type: Free (spins down after inactivity — first request may take 30–60s to wake)
 
 ## Roadmap (ordered)
 
 ### Pre-demo (by April 22)
-1. GitHub repo setup
-2. Render deploy + live URL
-3. Dev/prod env config
+1. ✅ GitHub repo setup
+2. ✅ Render deploy + live URL
+3. ✅ Dev/prod env config
 4. R2 storage + upload icons/PDFs on generation
 5. Fix known issues (UI, layout, maze rendering, icon distortion, ICON_SIZE)
 
@@ -129,6 +152,7 @@ pnpm --filter @worksheet/frontend build
 - **Flux Canny** (img2img via edge detection) is the working model for uploaded reference photos — do not swap without testing
 - Flux Schnell failed on obscure references; Ideogram v3 remix ignored style prompts
 - In-memory icon cache exists but does not persist across server restarts — R2/KV cache is the fix
+- Render free tier spins down after inactivity, which clears the in-memory icon cache on every wake
 
 ## Dev environment
 
