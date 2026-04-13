@@ -238,6 +238,7 @@ export default function WorksheetForm() {
         )}
 
       </div>
+      <p className="mt-4 text-xs text-gray-400">v-{__GIT_HASH__}</p>
     </div>
   )
 }
