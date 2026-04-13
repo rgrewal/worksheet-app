@@ -130,8 +130,13 @@ export default function WorksheetForm() {
                   onChange={e => setActivity(e.target.value as WorksheetSpec['activity'])}
                   className={inputCls}
                 >
-                  {(['maze', 'tracing', 'counting', 'matching'] as const).map(a => (
-                    <option key={a} value={a}>{a.charAt(0).toUpperCase() + a.slice(1)}</option>
+                  {([
+                    { value: 'maze',     label: 'Maze',     enabled: true },
+                    { value: 'counting', label: 'Counting', enabled: !import.meta.env.PROD },
+                    { value: 'tracing',  label: 'Tracing',  enabled: !import.meta.env.PROD },
+                    { value: 'matching', label: 'Matching', enabled: !import.meta.env.PROD },
+                  ] as const).filter(a => a.enabled).map(a => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
                 </select>
               </div>

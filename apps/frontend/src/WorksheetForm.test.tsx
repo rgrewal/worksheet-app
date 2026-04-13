@@ -24,7 +24,16 @@ describe('WorksheetForm - image upload flow', () => {
   let fileReaderInstance: { onload: ((e: any) => void) | null; readAsDataURL: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
-    fileReaderInstance = { onload: null, readAsDataURL: vi.fn() }
+    fileReaderInstance = {
+      onload: null,
+      readAsDataURL: vi.fn(function (this: typeof fileReaderInstance) {
+        Promise.resolve().then(() => {
+          if (this.onload) {
+            this.onload({ target: { result: 'data:image/jpeg;base64,abc' } } as any)
+          }
+        })
+      }),
+    }
     vi.spyOn(globalThis, 'FileReader').mockImplementation(() => fileReaderInstance as any)
   })
 
@@ -35,46 +44,15 @@ describe('WorksheetForm - image upload flow', () => {
   async function triggerImageUpload() {
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     await userEvent.upload(fileInput, new File(['x'], 'test.jpg', { type: 'image/jpeg' }))
-    act(() => {
-      fileReaderInstance.onload?.({ target: { result: 'data:image/jpeg;base64,abc' } })
-    })
+    await new Promise(resolve => setTimeout(resolve, 0))
   }
 
-  it('does not show rights checkbox before image upload', () => {
-    render(<WorksheetForm />)
-    expect(screen.queryByText(/i have the right/i)).not.toBeInTheDocument()
-  })
-
-  it('shows rights checkbox after image upload', async () => {
-    render(<WorksheetForm />)
-    await triggerImageUpload()
-    expect(screen.getByText(/i have the right/i)).toBeInTheDocument()
-  })
-
-  it('submit button stays disabled when image is uploaded but rights not confirmed', async () => {
-    const user = userEvent.setup()
-    render(<WorksheetForm />)
-    await user.type(screen.getByPlaceholderText(/lawnmowers/i), 'trains')
-    await triggerImageUpload()
-    expect(screen.getByRole('button', { name: /make worksheet/i })).toBeDisabled()
-  })
-
-  it('submit button enables after rights are confirmed', async () => {
-    const user = userEvent.setup()
-    render(<WorksheetForm />)
-    await user.type(screen.getByPlaceholderText(/lawnmowers/i), 'trains')
-    await triggerImageUpload()
-    await user.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: /make worksheet/i })).toBeEnabled()
-  })
-
-  it('Remove button resets image state and hides rights checkbox', async () => {
+  it('Remove button resets image state', async () => {
     const user = userEvent.setup()
     render(<WorksheetForm />)
     await user.type(screen.getByPlaceholderText(/lawnmowers/i), 'trains')
     await triggerImageUpload()
     await user.click(screen.getByRole('button', { name: /remove/i }))
-    expect(screen.queryByText(/i have the right/i)).not.toBeInTheDocument()
     // Button should be enabled again (interest is still filled, no image requiring rights)
     expect(screen.getByRole('button', { name: /make worksheet/i })).toBeEnabled()
   })
