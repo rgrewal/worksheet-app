@@ -27,6 +27,7 @@ const PAGE_W = 612
 const PAGE_H = 792
 const MARGIN = 48
 const CONTENT_W = PAGE_W - MARGIN * 2
+const ICON_SIZE = 120
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FONT_NUNITO = path.join(__dirname, '..', 'fonts', 'Nunito-Bold.ttf')
@@ -207,7 +208,7 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
         const labelBottom = clearPdfY + 4 + finishSize + 4
         const iconTop     = Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
         const iconBottom  = clearPdfY + clearPdfSize * (1 - ICON_PAD)
-        const iconSize    = Math.min(clearPdfSize * (1 - ICON_PAD * 2), iconBottom - iconTop)
+        const iconSize    = ICON_SIZE
         const iconX       = clearPdfX + (clearPdfSize - iconSize) / 2
         const iconY       = iconTop
 
