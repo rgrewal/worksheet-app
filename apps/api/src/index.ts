@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { execSync } from 'child_process'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { zValidator } from '@hono/zod-validator'
@@ -7,6 +8,8 @@ import { generateMaze, mazeToSvg } from './services/maze.js'
 import { fetchOrGenerateIcon } from './services/icons.js'
 import { buildPdf } from './services/pdf.js'
 import logger from './lib/logger.js'
+
+const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
 
 const app = new Hono()
 
@@ -37,7 +40,7 @@ app.use('*', cors({
   allowHeaders: ['Content-Type'],
 }))
 
-app.get('/health', (c) => c.json({ status: 'ok' }))
+app.get('/health', (c) => c.json({ status: 'ok', git: gitHash }))
 
 app.post(
   '/generate',
