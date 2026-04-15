@@ -2,7 +2,24 @@
   "permissions": {
     "allow": [
       "Bash(pnpm --filter @worksheet/api exec tsc --noEmit)",
-      "Bash(pnpm --filter @worksheet/api test)"
+      "Bash(pnpm --filter @worksheet/api test)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm --filter @worksheet/shared exec tsc --noEmit)",
+      "Bash(grep -v \"^$\")",
+      "Bash(pnpm --filter @worksheet/frontend exec tsc --noEmit)",
+      "Bash(pnpm --filter @worksheet/api add sharp)",
+      "Bash(pnpm --filter @worksheet/api add -D @types/sharp)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(pnpm rebuild *)",
+      "Bash(node -e \"import\\('sharp'\\).then\\(m => console.log\\('sharp ok', m.default.versions\\)\\)\")",
+      "Bash(node -e \"import\\('./node_modules/.pnpm/sharp@0.34.5/node_modules/sharp/lib/index.js'\\).then\\(m => console.log\\('ok'\\)\\).catch\\(e => console.error\\(e.message\\)\\)\")",
+      "Bash(pnpm install *)",
+      "Bash(node --input-type=module)",
+      "Bash(pnpm --filter @worksheet/api add potrace)",
+      "Bash(pnpm --filter @worksheet/api add -D @types/potrace)",
+      "Bash(git stash *)",
+      "Bash(pnpm --filter @worksheet/api typecheck)",
+      "Bash(npx tsc *)"
     ]
   }
 }

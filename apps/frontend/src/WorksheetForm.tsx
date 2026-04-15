@@ -132,6 +132,7 @@ export default function WorksheetForm() {
                 >
                   {([
                     { value: 'maze',     label: 'Maze',     enabled: true },
+                    { value: 'cutting',  label: 'Cutting',  enabled: true },
                     { value: 'counting', label: 'Counting', enabled: !import.meta.env.PROD },
                     { value: 'tracing',  label: 'Tracing',  enabled: !import.meta.env.PROD },
                     { value: 'matching', label: 'Matching', enabled: !import.meta.env.PROD },
