@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const ActivityType = z.enum(['maze', 'tracing', 'counting', 'matching'])
+export const ActivityType = z.enum(['maze', 'cutting', 'tracing', 'counting', 'matching'])
 export type ActivityType = z.infer<typeof ActivityType>
 
 export const DifficultyLevel = z.enum(['easy', 'medium', 'hard'])
@@ -58,7 +58,12 @@ export interface MatchingData {
   pairs: MatchingPair[]
 }
 
-export type ActivityData = MazeData | CountingData | TracingData | MatchingData
+export interface CuttingData {
+  lineCount: number
+  patterns: Array<'straight' | 'zigzag' | 'wave'>
+}
+
+export type ActivityData = MazeData | CountingData | TracingData | MatchingData | CuttingData
 
 export interface Worksheet {
   spec: WorksheetSpec

@@ -1,10 +1,12 @@
 import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
+import sharp from 'sharp'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import type { WorksheetSpec, Icon } from '@worksheet/shared'
 import logger from '../lib/logger.js'
 import { getCornerImage } from './cornerImages.js'
+import { generateCuttingOutline } from './outline.js'
 
 interface GapPosition {
   svgX: number
@@ -18,8 +20,9 @@ interface BuildPdfOptions {
   activityLabels?: {
     svgW: number
     svgH: number
-    entryGap: GapPosition
+    entryGap?: GapPosition
     clearing?: { svgX: number; svgY: number; svgSize: number }
+    showFinishLabel?: boolean
   }
 }
 
@@ -75,6 +78,28 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
   const iconBuffer = await resolveIconBuffer(icon)
   const isSvgIcon  = icon.url.startsWith('data:image/svg+xml')
 
+  // For cutting worksheets: pre-compute the dashed outline path (best-effort)
+  const isCutting = activityLabels && !activityLabels.showFinishLabel && !!activityLabels.clearing
+  let cuttingOutline: string | null = null
+  let cuttingImgW = 0
+  let cuttingImgH = 0
+  if (isCutting && iconBuffer) {
+    try {
+      cuttingOutline = await generateCuttingOutline(iconBuffer, spec.difficulty)
+    } catch (err) {
+      logger.error({ err }, 'pdf: cutting outline failed — skipping')
+    }
+    logger.debug({ hasOutline: !!cuttingOutline }, 'pdf: cutting outline resolved')
+    try {
+      const meta = await sharp(iconBuffer).metadata()
+      cuttingImgW = meta.width ?? 0
+      cuttingImgH = meta.height ?? 0
+      logger.debug({ cuttingImgW, cuttingImgH }, 'pdf: cutting image dimensions')
+    } catch (err) {
+      logger.warn({ err }, 'pdf: could not read cutting image dimensions')
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
@@ -85,9 +110,9 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
       },
     })
 
-    const chunks: Buffer[] = []
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk))
-    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    const chunks: Uint8Array[] = []
+    doc.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.from(Buffer.concat(chunks))))
     doc.on('error', reject)
 
     // Register Nunito, fall back to Helvetica if file is missing
@@ -113,9 +138,10 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
 
     // ── Title ──────────────────────────────────────────────────────────────
 
+    const activityWord = capitalise(spec.activity)
     const title = spec.childName
-      ? `${capitalise(spec.childName)}'s Adventure Maze: ${capitalise(spec.interest)}`
-      : `Adventure Maze: ${capitalise(spec.interest)}`
+      ? `${capitalise(spec.childName)}'s Adventure ${activityWord}: ${capitalise(spec.interest)}`
+      : `Adventure ${activityWord}: ${capitalise(spec.interest)}`
 
     doc
       .fontSize(22)
@@ -165,23 +191,25 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
 
       // ── "Start >" label flush against the entry wall ────────────────────
 
-      const entryPdfX = mazeX + xOffset + entryGap.svgX * scale
-      const entryPdfY = cursor + yOffset + entryGap.svgY * scale
+      if (entryGap) {
+        const entryPdfX = mazeX + xOffset + entryGap.svgX * scale
+        const entryPdfY = cursor + yOffset + entryGap.svgY * scale
 
-      logger.debug({ x: entryPdfX.toFixed(1), y: entryPdfY.toFixed(1) }, 'pdf: entry gap position')
+        logger.debug({ x: entryPdfX.toFixed(1), y: entryPdfY.toFixed(1) }, 'pdf: entry gap position')
 
-      const labelSize = 13
-      const labelGap  = 4
-      const pageEdge  = 4
+        const labelSize = 13
+        const labelGap  = 4
+        const pageEdge  = 4
 
-      doc
-        .font(titleFont).fontSize(labelSize).fillColor('#111111')
-        .text(
-          'Start >',
-          pageEdge,
-          entryPdfY - labelSize * 0.35,
-          { width: entryPdfX - pageEdge - labelGap, align: 'right', lineBreak: false }
-        )
+        doc
+          .font(titleFont).fontSize(labelSize).fillColor('#111111')
+          .text(
+            'Start >',
+            pageEdge,
+            entryPdfY - labelSize * 0.35,
+            { width: entryPdfX - pageEdge - labelGap, align: 'right', lineBreak: false }
+          )
+      }
 
       // ── Icon centred in the clearing ─────────────────────────────────────
       // The clearing is an open room; the icon fills ~85% of it with padding
@@ -192,37 +220,64 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
         const clearPdfY    = cursor + yOffset + clearing.svgY * scale
         const clearPdfSize = clearing.svgSize * scale
 
-        // ── "Finish" label centred at top of clearing ──────────────────────
+        // ── "Finish" label centred at top of clearing (maze only) ──────────
         const finishSize = 13
-        doc
-          .font(titleFont).fontSize(finishSize).fillColor('#111111')
-          .text(
-            'Finish',
-            clearPdfX,
-            clearPdfY + 4,
-            { width: clearPdfSize, align: 'center', lineBreak: false }
-          )
+        if (activityLabels.showFinishLabel) {
+          doc
+            .font(titleFont).fontSize(finishSize).fillColor('#111111')
+            .text(
+              'Finish',
+              clearPdfX,
+              clearPdfY + 4,
+              { width: clearPdfSize, align: 'center', lineBreak: false }
+            )
+        }
 
-        // Push icon below the "Finish" label (4pt top padding + label height + 4pt gap)
+        // ── Compute icon position ─────────────────────────────────────────
         const ICON_PAD    = 0.075
         const labelBottom = clearPdfY + 4 + finishSize + 4
-        const iconTop     = Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
-        const iconBottom  = clearPdfY + clearPdfSize * (1 - ICON_PAD)
-        const iconSize    = ICON_SIZE
-        const iconX       = clearPdfX + (clearPdfSize - iconSize) / 2
-        const iconY       = iconTop
+
+        let iconX: number
+        let iconY: number
+        let iconRendW: number
+        let iconRendH: number
+
+        if (!activityLabels.showFinishLabel && cuttingImgW && cuttingImgH) {
+          // Cutting: fit image into the full content area, centered on the page
+          const HEADER_BOTTOM = MARGIN + 32 + 16  // below title + divider = 96pt
+          const FOOTER_TOP    = PAGE_H - MARGIN    // 744pt
+          const PAD           = 24
+          const availW        = CONTENT_W - PAD * 2
+          const availH        = FOOTER_TOP - HEADER_BOTTOM - PAD * 2
+          const s             = Math.min(availW / cuttingImgW, availH / cuttingImgH)
+          iconRendW           = cuttingImgW * s
+          iconRendH           = cuttingImgH * s
+          iconX               = MARGIN + (CONTENT_W - iconRendW) / 2
+          iconY               = HEADER_BOTTOM + ((FOOTER_TOP - HEADER_BOTTOM) - iconRendH) / 2
+          logger.debug({ iconX: iconX.toFixed(1), iconY: iconY.toFixed(1), iconRendW: iconRendW.toFixed(1), iconRendH: iconRendH.toFixed(1) }, 'pdf: cutting icon position')
+        } else {
+          // Maze: clearing-based position
+          const iconSize = activityLabels.showFinishLabel
+            ? ICON_SIZE
+            : clearPdfSize * (1 - ICON_PAD * 2)
+          iconRendW = iconRendH = iconSize
+          iconX = clearPdfX + (clearPdfSize - iconSize) / 2
+          iconY = activityLabels.showFinishLabel
+            ? Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
+            : clearPdfY + (clearPdfSize - iconSize) / 2
+        }
 
         logger.debug({ x: clearPdfX.toFixed(1), y: clearPdfY.toFixed(1), size: clearPdfSize.toFixed(1) }, 'pdf: clearing position')
 
         if (isSvgIcon) {
-          logger.debug({ iconX, iconY, iconSize }, 'pdf: embedding SVG icon into clearing')
+          logger.debug({ iconX, iconY, iconRendW, iconRendH }, 'pdf: embedding SVG icon into clearing')
           const svgStr = Buffer.from(icon.url.split(',')[1], 'base64').toString('utf8')
-          SVGtoPDF(doc, svgStr, iconX, iconY, { width: iconSize, height: iconSize })
+          SVGtoPDF(doc, svgStr, iconX, iconY, { width: iconRendW, height: iconRendH })
           logger.debug('pdf: SVG icon embedded')
         } else if (iconBuffer) {
-          logger.debug({ iconX, iconY, iconSize, byteLength: iconBuffer.length }, 'pdf: embedding raster icon into clearing')
+          logger.debug({ iconX, iconY, iconRendW, iconRendH, byteLength: iconBuffer.length }, 'pdf: embedding raster icon into clearing')
           try {
-            doc.image(iconBuffer, iconX, iconY, { width: iconSize, height: iconSize, cover: [iconSize, iconSize] })
+            doc.image(iconBuffer, iconX, iconY, { width: iconRendW, height: iconRendH })
             logger.debug('pdf: raster icon embedded')
           } catch (err) {
             logger.error({ err }, 'pdf: failed to embed raster icon into clearing')
@@ -230,11 +285,159 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
         } else {
           logger.warn({ isSvgIcon, hasBuffer: !!iconBuffer }, 'pdf: no icon to embed in clearing — icon will be blank')
         }
+
+        // ── Dashed cutting outline (cutting worksheets only) ──────────────
+        if (cuttingOutline && !activityLabels.showFinishLabel) {
+          // Scale path from image-space coords to match exactly where the icon was rendered
+          const s = iconRendW / cuttingImgW
+          const scaledD = cuttingOutline.replace(/([-\d.]+)\s+([-\d.]+)/g, (_m, xs, ys) => {
+            const x = iconX + parseFloat(xs) * s
+            const y = iconY + parseFloat(ys) * s
+            return `${x.toFixed(2)} ${y.toFixed(2)}`
+          })
+
+          logger.debug({ iconX, iconY, iconRendW, iconRendH, s }, 'pdf: drawing cutting outline')
+          doc
+            .save()
+            .path(scaledD)
+            .dash(5, { space: 5 })
+            .lineWidth(1.5)
+            .strokeColor('#444444')
+            .stroke()
+            .restore()
+        }
       }
     }
 
     // ── Footer ─────────────────────────────────────────────────────────────
 
+    doc
+      .fontSize(8)
+      .font('Helvetica')
+      .fillColor('#aaaaaa')
+      .text('worksheetapp.com', MARGIN, PAGE_H - MARGIN + 8, {
+        width: CONTENT_W,
+        align: 'center',
+      })
+
+    doc.end()
+  })
+}
+
+// ─── Cutting PDF builder ──────────────────────────────────────────────────────
+
+export async function buildCuttingPdf(opts: {
+  spec: WorksheetSpec
+  pngBuffer: Buffer
+  outlinePath: string
+}): Promise<Buffer> {
+  const { spec, pngBuffer, outlinePath } = opts
+
+  // Pre-compute image dimensions before opening the PDFKit stream
+  let imgW = 0
+  let imgH = 0
+  try {
+    const meta = await sharp(pngBuffer).metadata()
+    imgW = meta.width ?? 0
+    imgH = meta.height ?? 0
+  } catch (err) {
+    logger.warn({ err }, 'buildCuttingPdf: could not read image dimensions')
+  }
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margin: 0,
+      info: {
+        Title: `${spec.interest} cutting worksheet`,
+        Author: 'WorksheetApp',
+      },
+    })
+
+    const chunks: Uint8Array[] = []
+    doc.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.from(Buffer.concat(chunks))))
+    doc.on('error', reject)
+
+    let titleFont = 'Helvetica-Bold'
+    try {
+      doc.registerFont('Nunito-Bold', FONT_NUNITO)
+      titleFont = 'Nunito-Bold'
+    } catch {
+      // font file not found — Helvetica keeps things running
+    }
+
+    let cursor = MARGIN
+
+    // ── Corner illustration ────────────────────────────────────────────────
+    const CORNER_SIZE = 44
+    const cornerSvg = getCornerImage(spec.interest)
+    SVGtoPDF(doc, cornerSvg, PAGE_W - MARGIN - CORNER_SIZE, 4, {
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+    })
+
+    // ── Title ──────────────────────────────────────────────────────────────
+    const title = spec.childName
+      ? `${capitalise(spec.childName)}'s Cutting: ${capitalise(spec.interest)}`
+      : `Cutting: ${capitalise(spec.interest)}`
+
+    doc
+      .fontSize(22)
+      .font(titleFont)
+      .fillColor('#111111')
+      .text(title, MARGIN, cursor, { width: CONTENT_W, align: 'center' })
+
+    cursor += 32
+
+    // ── Divider ────────────────────────────────────────────────────────────
+    doc
+      .moveTo(MARGIN, cursor)
+      .lineTo(PAGE_W - MARGIN, cursor)
+      .lineWidth(1)
+      .strokeColor('#cccccc')
+      .stroke()
+
+    cursor += 16
+
+    // ── Image centered in remaining space ──────────────────────────────────
+    const FOOTER_TOP = PAGE_H - MARGIN
+    const PAD = 24
+    const maxW = CONTENT_W - PAD * 2
+    const maxH = FOOTER_TOP - cursor - PAD * 2
+
+    let rendW = maxW
+    let rendH = maxH
+    if (imgW > 0 && imgH > 0) {
+      const s = Math.min(maxW / imgW, maxH / imgH)
+      rendW = imgW * s
+      rendH = imgH * s
+    }
+
+    const imgX = MARGIN + PAD + (maxW - rendW) / 2
+    const imgY = cursor + PAD + (maxH - rendH) / 2
+
+    doc.image(pngBuffer, imgX, imgY, { width: rendW, height: rendH })
+
+    // ── Dashed cutting outline ─────────────────────────────────────────────
+    if (imgW > 0 && imgH > 0) {
+      const s = rendW / imgW
+      const scaledD = outlinePath.replace(/([-\d.]+)\s+([-\d.]+)/g, (_m, xs, ys) => {
+        const x = imgX + parseFloat(xs) * s
+        const y = imgY + parseFloat(ys) * s
+        return `${x.toFixed(2)} ${y.toFixed(2)}`
+      })
+      doc
+        .save()
+        .path(scaledD)
+        .dash(5, { space: 5 })
+        .lineWidth(1.5)
+        .strokeColor('#333333')
+        .stroke()
+        .restore()
+    }
+
+    // ── Footer ─────────────────────────────────────────────────────────────
     doc
       .fontSize(8)
       .font('Helvetica')

@@ -5,8 +5,10 @@ import { cors } from 'hono/cors'
 import { zValidator } from '@hono/zod-validator'
 import { WorksheetSpec } from '@worksheet/shared'
 import { generateMaze, mazeToSvg } from './services/maze.js'
-import { fetchOrGenerateIcon } from './services/icons.js'
-import { buildPdf } from './services/pdf.js'
+import { fetchOrGenerateIcon, type IconGenerationOptions } from './services/icons.js'
+import { buildPdf, buildCuttingPdf } from './services/pdf.js'
+import { generateCuttingIcon } from './services/cuttingIcon.js'
+import { generateCuttingOutline } from './services/outline.js'
 import logger from './lib/logger.js'
 
 const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
@@ -53,6 +55,27 @@ app.post(
     try {
       let activitySvg: string
       let activityLabels: Parameters<typeof buildPdf>[0]['activityLabels']
+      let iconOptions: IconGenerationOptions | undefined
+
+      if (spec.activity === 'cutting') {
+        logger.info('cutting: generating icon')
+        const pngBuffer = await generateCuttingIcon(spec.interest)
+        logger.info({ byteLength: pngBuffer.length }, 'cutting: icon ready')
+
+        logger.info('cutting: tracing outline')
+        const outlinePath = await generateCuttingOutline(pngBuffer, spec.difficulty)
+        logger.info({ dLength: outlinePath.length }, 'cutting: outline ready')
+
+        logger.info('cutting: rendering PDF')
+        const pdfBytes = await buildCuttingPdf({ spec, pngBuffer, outlinePath })
+        logger.info({ bytes: pdfBytes.length }, 'cutting: PDF complete')
+
+        return c.newResponse(new Uint8Array(pdfBytes), 200, {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${spec.interest}-cutting.pdf"`,
+          'Cache-Control': 'public, max-age=3600',
+        })
+      }
 
       switch (spec.activity) {
         case 'maze': {
@@ -64,6 +87,7 @@ app.post(
             svgH: result.svgH,
             entryGap: result.entryGap,
             clearing: result.clearing,
+            showFinishLabel: true,
           }
           logger.debug({ svgW: result.svgW, svgH: result.svgH }, 'maze generated')
           break
@@ -74,7 +98,8 @@ app.post(
 
       const icon = await fetchOrGenerateIcon(
         spec.interest,
-        spec.referenceImageDataUrl
+        spec.referenceImageDataUrl,
+        iconOptions,
       )
       logger.info({ iconCached: icon.cached, iconUrl: icon.url.slice(0, 80) }, 'icon resolved')
 
