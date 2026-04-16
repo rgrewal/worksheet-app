@@ -63,11 +63,11 @@ app.post(
         logger.info({ byteLength: pngBuffer.length }, 'cutting: icon ready')
 
         logger.info('cutting: tracing outline')
-        const outlinePath = await generateCuttingOutline(pngBuffer, spec.difficulty)
-        logger.info({ dLength: outlinePath.length }, 'cutting: outline ready')
+        const outline = await generateCuttingOutline(pngBuffer, spec.difficulty)
+        logger.info({ contours: outline.pathData.length }, 'cutting: outline ready')
 
         logger.info('cutting: rendering PDF')
-        const pdfBytes = await buildCuttingPdf({ spec, pngBuffer, outlinePath })
+        const pdfBytes = await buildCuttingPdf({ spec, pngBuffer, outline })
         logger.info({ bytes: pdfBytes.length }, 'cutting: PDF complete')
 
         return c.newResponse(new Uint8Array(pdfBytes), 200, {

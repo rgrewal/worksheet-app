@@ -41,5 +41,8 @@ Thumbs.db
 # Generated PDFs (transient output, not source)
 *.pdf
 
+# Debug script artifacts
+apps/api/src/scripts/test-output/
+
 # TypeScript
 *.tsbuildinfo

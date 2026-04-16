@@ -19,7 +19,11 @@
       "Bash(pnpm --filter @worksheet/api add -D @types/potrace)",
       "Bash(git stash *)",
       "Bash(pnpm --filter @worksheet/api typecheck)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx tsx *)",
+      "Bash(cat)",
+      "Bash(node /tmp/check2.mjs)",
+      "Bash(node /tmp/check4.mjs)"
     ]
   }
 }
