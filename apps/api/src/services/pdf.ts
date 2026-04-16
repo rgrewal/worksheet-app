@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 import type { WorksheetSpec, Icon } from '@worksheet/shared'
 import logger from '../lib/logger.js'
 import { getCornerImage } from './cornerImages.js'
-import { generateCuttingOutline } from './outline.js'
+import type { CuttingOutlineResult } from './outline.js'
 
 interface GapPosition {
   svgX: number
@@ -77,28 +77,6 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
   // Resolve async work before touching PDFKit
   const iconBuffer = await resolveIconBuffer(icon)
   const isSvgIcon  = icon.url.startsWith('data:image/svg+xml')
-
-  // For cutting worksheets: pre-compute the dashed outline path (best-effort)
-  const isCutting = activityLabels && !activityLabels.showFinishLabel && !!activityLabels.clearing
-  let cuttingOutline: string | null = null
-  let cuttingImgW = 0
-  let cuttingImgH = 0
-  if (isCutting && iconBuffer) {
-    try {
-      cuttingOutline = await generateCuttingOutline(iconBuffer, spec.difficulty)
-    } catch (err) {
-      logger.error({ err }, 'pdf: cutting outline failed — skipping')
-    }
-    logger.debug({ hasOutline: !!cuttingOutline }, 'pdf: cutting outline resolved')
-    try {
-      const meta = await sharp(iconBuffer).metadata()
-      cuttingImgW = meta.width ?? 0
-      cuttingImgH = meta.height ?? 0
-      logger.debug({ cuttingImgW, cuttingImgH }, 'pdf: cutting image dimensions')
-    } catch (err) {
-      logger.warn({ err }, 'pdf: could not read cutting image dimensions')
-    }
-  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -237,35 +215,11 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
         const ICON_PAD    = 0.075
         const labelBottom = clearPdfY + 4 + finishSize + 4
 
-        let iconX: number
-        let iconY: number
-        let iconRendW: number
-        let iconRendH: number
-
-        if (!activityLabels.showFinishLabel && cuttingImgW && cuttingImgH) {
-          // Cutting: fit image into the full content area, centered on the page
-          const HEADER_BOTTOM = MARGIN + 32 + 16  // below title + divider = 96pt
-          const FOOTER_TOP    = PAGE_H - MARGIN    // 744pt
-          const PAD           = 24
-          const availW        = CONTENT_W - PAD * 2
-          const availH        = FOOTER_TOP - HEADER_BOTTOM - PAD * 2
-          const s             = Math.min(availW / cuttingImgW, availH / cuttingImgH)
-          iconRendW           = cuttingImgW * s
-          iconRendH           = cuttingImgH * s
-          iconX               = MARGIN + (CONTENT_W - iconRendW) / 2
-          iconY               = HEADER_BOTTOM + ((FOOTER_TOP - HEADER_BOTTOM) - iconRendH) / 2
-          logger.debug({ iconX: iconX.toFixed(1), iconY: iconY.toFixed(1), iconRendW: iconRendW.toFixed(1), iconRendH: iconRendH.toFixed(1) }, 'pdf: cutting icon position')
-        } else {
-          // Maze: clearing-based position
-          const iconSize = activityLabels.showFinishLabel
-            ? ICON_SIZE
-            : clearPdfSize * (1 - ICON_PAD * 2)
-          iconRendW = iconRendH = iconSize
-          iconX = clearPdfX + (clearPdfSize - iconSize) / 2
-          iconY = activityLabels.showFinishLabel
-            ? Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
-            : clearPdfY + (clearPdfSize - iconSize) / 2
-        }
+        const iconSize = ICON_SIZE
+        const iconRendW = iconSize
+        const iconRendH = iconSize
+        const iconX = clearPdfX + (clearPdfSize - iconSize) / 2
+        const iconY = Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
 
         logger.debug({ x: clearPdfX.toFixed(1), y: clearPdfY.toFixed(1), size: clearPdfSize.toFixed(1) }, 'pdf: clearing position')
 
@@ -286,26 +240,6 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
           logger.warn({ isSvgIcon, hasBuffer: !!iconBuffer }, 'pdf: no icon to embed in clearing — icon will be blank')
         }
 
-        // ── Dashed cutting outline (cutting worksheets only) ──────────────
-        if (cuttingOutline && !activityLabels.showFinishLabel) {
-          // Scale path from image-space coords to match exactly where the icon was rendered
-          const s = iconRendW / cuttingImgW
-          const scaledD = cuttingOutline.replace(/([-\d.]+)\s+([-\d.]+)/g, (_m, xs, ys) => {
-            const x = iconX + parseFloat(xs) * s
-            const y = iconY + parseFloat(ys) * s
-            return `${x.toFixed(2)} ${y.toFixed(2)}`
-          })
-
-          logger.debug({ iconX, iconY, iconRendW, iconRendH, s }, 'pdf: drawing cutting outline')
-          doc
-            .save()
-            .path(scaledD)
-            .dash(5, { space: 5 })
-            .lineWidth(1.5)
-            .strokeColor('#444444')
-            .stroke()
-            .restore()
-        }
       }
     }
 
@@ -329,9 +263,9 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
 export async function buildCuttingPdf(opts: {
   spec: WorksheetSpec
   pngBuffer: Buffer
-  outlinePath: string
+  outline: CuttingOutlineResult
 }): Promise<Buffer> {
-  const { spec, pngBuffer, outlinePath } = opts
+  const { spec, pngBuffer, outline } = opts
 
   // Pre-compute image dimensions before opening the PDFKit stream
   let imgW = 0
@@ -422,19 +356,17 @@ export async function buildCuttingPdf(opts: {
     // ── Dashed cutting outline ─────────────────────────────────────────────
     if (imgW > 0 && imgH > 0) {
       const s = rendW / imgW
-      const scaledD = outlinePath.replace(/([-\d.]+)\s+([-\d.]+)/g, (_m, xs, ys) => {
+      const scaledD = outline.pathData.replace(/([-\d.]+)\s+([-\d.]+)/g, (_m: string, xs: string, ys: string) => {
         const x = imgX + parseFloat(xs) * s
         const y = imgY + parseFloat(ys) * s
         return `${x.toFixed(2)} ${y.toFixed(2)}`
       })
-      doc
-        .save()
-        .path(scaledD)
-        .dash(5, { space: 5 })
-        .lineWidth(1.5)
-        .strokeColor('#333333')
-        .stroke()
-        .restore()
+      doc.save()
+      doc.path(scaledD)
+        .dash(outline.dash * s, { space: outline.gap * s })
+        .lineWidth(outline.strokePx * s)
+        .stroke('#333333')
+      doc.restore()
     }
 
     // ── Footer ─────────────────────────────────────────────────────────────
