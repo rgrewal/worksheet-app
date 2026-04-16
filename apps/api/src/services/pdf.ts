@@ -117,9 +117,7 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
     // ── Title ──────────────────────────────────────────────────────────────
 
     const activityWord = capitalise(spec.activity)
-    const title = spec.childName
-      ? `${capitalise(spec.childName)}'s Adventure ${activityWord}: ${capitalise(spec.interest)}`
-      : `Adventure ${activityWord}: ${capitalise(spec.interest)}`
+    const title = worksheetTitle(spec.childName, `Adventure ${activityWord}`, spec.interest)
 
     doc
       .fontSize(22)
@@ -312,9 +310,7 @@ export async function buildCuttingPdf(opts: {
     })
 
     // ── Title ──────────────────────────────────────────────────────────────
-    const title = spec.childName
-      ? `${capitalise(spec.childName)}'s Cutting: ${capitalise(spec.interest)}`
-      : `Cutting: ${capitalise(spec.interest)}`
+    const title = worksheetTitle(spec.childName, 'Cutting', spec.interest)
 
     doc
       .fontSize(22)
@@ -385,4 +381,11 @@ export async function buildCuttingPdf(opts: {
 
 function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Builds the worksheet title. Omits the interest suffix when the string is blank. */
+function worksheetTitle(childName: string | undefined, activityLabel: string, interest: string): string {
+  const prefix = childName ? `${capitalise(childName)}'s ` : ''
+  const suffix = interest.trim() ? `: ${capitalise(interest)}` : ''
+  return `${prefix}${activityLabel}${suffix}`
 }

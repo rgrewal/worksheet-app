@@ -9,6 +9,7 @@ import { fetchOrGenerateIcon, type IconGenerationOptions } from './services/icon
 import { buildPdf, buildCuttingPdf } from './services/pdf.js'
 import { generateCuttingIcon } from './services/cuttingIcon.js'
 import { generateCuttingOutline } from './services/outline.js'
+import { prepareReferenceImageFromDataUrl } from './services/backgroundRemoval.js'
 import logger from './lib/logger.js'
 
 const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
@@ -58,9 +59,17 @@ app.post(
       let iconOptions: IconGenerationOptions | undefined
 
       if (spec.activity === 'cutting') {
-        logger.info('cutting: generating icon')
-        const pngBuffer = await generateCuttingIcon(spec.interest)
-        logger.info({ byteLength: pngBuffer.length }, 'cutting: icon ready')
+        let pngBuffer: Buffer
+
+        if (spec.referenceImageDataUrl) {
+          logger.info('cutting: preparing reference image')
+          pngBuffer = await prepareReferenceImageFromDataUrl(spec.referenceImageDataUrl)
+          logger.info({ byteLength: pngBuffer.length }, 'cutting: reference image ready')
+        } else {
+          logger.info('cutting: generating icon via Ideogram')
+          pngBuffer = await generateCuttingIcon(spec.interest)
+          logger.info({ byteLength: pngBuffer.length }, 'cutting: icon ready')
+        }
 
         logger.info('cutting: tracing outline')
         const outline = await generateCuttingOutline(pngBuffer, spec.difficulty)
@@ -72,7 +81,7 @@ app.post(
 
         return c.newResponse(new Uint8Array(pdfBytes), 200, {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="${spec.interest}-cutting.pdf"`,
+          'Content-Disposition': `inline; filename="${pdfSlug(spec)}-cutting.pdf"`,
           'Cache-Control': 'public, max-age=3600',
         })
       }
@@ -109,7 +118,7 @@ app.post(
 
       return c.newResponse(new Uint8Array(pdfBytes), 200, {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${spec.interest}-${spec.activity}.pdf"`,
+        'Content-Disposition': `inline; filename="${pdfSlug(spec)}-${spec.activity}.pdf"`,
         'Cache-Control': 'public, max-age=3600',
       })
     } catch (err) {
@@ -118,6 +127,12 @@ app.post(
     }
   }
 )
+
+/** Returns a safe filename slug: interest if present, child name if not, fallback 'worksheet'. */
+function pdfSlug(spec: { interest: string; childName?: string }): string {
+  const base = spec.interest.trim() || spec.childName?.trim() || 'worksheet'
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
 
 export default app
 

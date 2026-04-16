@@ -77,9 +77,8 @@ export default function WorksheetForm() {
   }
 
   const canSubmit = status !== 'loading'
-    && interest.trim().length > 0
+    && (interest.trim().length > 0 || !!referenceImage)
 
-  const interestLabel = "What do they love?"
   const interestPlaceholder = referenceImage
     ? 'e.g. Siren Head, Labubu, our dog Rex'
     : 'e.g. lawnmowers, garbage trucks, dinosaurs'
@@ -100,14 +99,17 @@ export default function WorksheetForm() {
           <form onSubmit={handleSubmit} className="space-y-5">
 
             <div>
-              <label className={labelCls}>{interestLabel}</label>
+              <label className={labelCls}>
+                What do they love?
+                {referenceImage && <span className="normal-case font-normal text-gray-400 tracking-normal"> (optional)</span>}
+              </label>
               <input
                 type="text"
                 value={interest}
                 onChange={e => setInterest(e.target.value)}
                 placeholder={interestPlaceholder}
                 className={inputCls}
-                required
+                required={!referenceImage}
               />
             </div>
 
