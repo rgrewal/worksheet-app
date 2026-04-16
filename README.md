@@ -9,7 +9,7 @@ Printable learning worksheets personalised to a child's interests.
 | Frontend | Vite + React + TypeScript + Tailwind |
 | API | Hono on Node (dev) / Cloudflare Workers (prod) |
 | PDF | PDFKit + svg-to-pdfkit |
-| Icons | fal.ai (AI generation) with in-memory cache |
+| Icons | fal.ai (Ideogram text-to-image + Birefnet background removal) with in-memory cache |
 | Shared types | Zod schemas in `packages/shared` |
 | Monorepo | pnpm workspaces |
 
@@ -58,10 +58,12 @@ worksheet-app/
 │       └── src/
 │           ├── index.ts           # Route handlers (thin controllers)
 │           ├── services/
-│           │   ├── maze.ts        # Maze generator + SVG renderer
-│           │   ├── icons.ts       # Cache-first icon service
-│           │   ├── outline.ts     # Cutting outline: alpha → potrace SVG path
-│           │   └── pdf.ts         # PDFKit worksheet builder
+│           │   ├── maze.ts              # Maze generator + SVG renderer
+│           │   ├── icons.ts             # Cache-first icon service (maze worksheets)
+│           │   ├── cuttingIcon.ts       # Ideogram text-to-image for cutting worksheets
+│           │   ├── backgroundRemoval.ts # fal-ai/birefnet/v2 + subject normalisation
+│           │   ├── outline.ts           # Cutting outline: distance-transform contour tracer
+│           │   └── pdf.ts               # PDFKit worksheet builder
 │           └── scripts/
 │               ├── test-images/          # Input PNGs for debugging (gitignored output, .gitkeep tracked)
 │               ├── test-output/          # Artifacts written here (gitignored)
@@ -108,20 +110,16 @@ cd apps/api
 npx tsx src/scripts/testOutline.ts
 ```
 
-Artifacts are written to `apps/api/src/scripts/test-output/`, named `{image}-{step}.png/svg`:
+## Cutting worksheet — user photo flow
 
-| Artifact | What it shows |
-|---|---|
-| `{name}-1-alpha.png` | Raw extracted alpha channel |
-| `{name}-2-threshold.png` | After `threshold(128)` |
-| `{name}-3-dilated.png` | After `dilate(N)` (and optional erode) |
-| `{name}-4-negated.png` | What potrace actually sees (black = subject) |
-| `{name}-{difficulty}-5-potrace.svg` | Raw potrace output |
-| `{name}-{difficulty}-6-composite.png` | Original PNG with the cutting line overlaid in red |
+When a user uploads a reference photo for a cutting worksheet, the API runs it through a background-removal pipeline before generating the cutting outline:
 
-The composite (step 6) is the key artifact — it shows whether the outline follows the subject correctly at each difficulty level.
+1. **Transparency check** — if the image already has significant transparent pixels (e.g. it was exported with a transparent background), the bg-removal step is skipped.
+2. **Background removal** — `fal-ai/birefnet/v2` isolates the foreground subject and returns a transparent-background PNG.
+3. **Normalisation** — the subject is cropped to its bounding box, padded proportionally, and resized if over 1800 px.
+4. **Outline tracing** — the distance-transform contour tracer in `services/outline.ts` generates a dashed cutting path scaled to the chosen difficulty level.
 
-Pipeline parameters are constants at the top of the script (`DILATE`, `ERODE`, `TURD_SIZE`, `OPT_TOLERANCE`) — tweak and re-run to iterate quickly.
+If no photo is uploaded, the cutting icon is generated from the interest text via Ideogram (`services/cuttingIcon.ts`) and follows the same outline/PDF steps.
 
 ## Deploying
 

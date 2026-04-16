@@ -23,7 +23,10 @@
       "Bash(npx tsx *)",
       "Bash(cat)",
       "Bash(node /tmp/check2.mjs)",
-      "Bash(node /tmp/check4.mjs)"
+      "Bash(node /tmp/check4.mjs)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm dev *)",
+      "WebFetch(domain:localhost)"
     ]
   }
 }

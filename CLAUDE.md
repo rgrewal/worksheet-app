@@ -38,7 +38,10 @@ pnpm --filter @worksheet/frontend dev
 pnpm --filter @worksheet/api dev
 ```
 
-No test suite is currently configured.
+Run tests:
+```bash
+pnpm --filter @worksheet/api test
+```
 
 ## Environment setup
 
@@ -74,7 +77,10 @@ Pnpm monorepo with three packages:
 - **`apps/frontend`** — Single React component (`WorksheetForm.tsx`) that collects form input, POSTs to `/generate`, and displays the returned PDF.
 - **`apps/api`** — Hono server with one route (`POST /generate`). Thin controller in `index.ts` delegates to services:
   - `services/maze.ts` — DFS-based maze generator → SVG renderer. Difficulty maps to grid size (6×6 / 10×10 / 14×14).
-  - `services/icons.ts` — In-memory cache keyed on normalized interest string. Tries: reference image → fal.ai img2img (Flux Canny), then text → fal.ai text-to-image, then placeholder SVG.
+  - `services/icons.ts` — In-memory cache keyed on normalized interest string. Tries: reference image → fal.ai img2img (Flux Canny), then text → fal.ai text-to-image, then placeholder SVG. Used by maze worksheets.
+  - `services/cuttingIcon.ts` — Generates a subject PNG via fal-ai/ideogram/v3/generate-transparent when no user photo is provided for cutting worksheets.
+  - `services/backgroundRemoval.ts` — Processes a user-uploaded image data URL for cutting worksheets: checks for existing transparency, removes background via fal-ai/birefnet/v2 if needed, then normalises (crop to bounding box → proportional padding → resize to ≤1800 px). Uses `@fal-ai/client` for storage upload + model call.
+  - `services/outline.ts` — Pure-TypeScript distance-transform contour tracer. Extracts alpha via sharp, applies close→fill-holes→dilate at per-difficulty margins, traces polygon edges, simplifies with Ramer–Douglas–Peucker. Returns `CuttingOutlineResult` (pathData in image-pixel coords + stroke/dash sizes).
   - `services/pdf.ts` — PDFKit assembles title + icon + activity SVG into a LETTER-size PDF. Uses stream-based buffer collection (PDFKit doesn't support async/await directly).
   - `services/storage.ts` — (pending) Cloudflare R2 upload/download via `@aws-sdk/client-s3`.
 
@@ -91,8 +97,8 @@ Pnpm monorepo with three packages:
 - UI is plain and unpolished
 - Layout issues present
 - Maze rendering quality needs improvement
-- Distorted output when users upload reference images for AI icon generation
-- `ICON_SIZE` should be bumped from `52` to `120` in `apps/api/src/services/pdf.ts` (one-line fix)
+- ✅ Distorted output when users upload reference images — fixed via birefnet/v2 background removal + normalisation pipeline
+- ✅ `ICON_SIZE` bumped to `120` in `apps/api/src/services/pdf.ts`
 
 ## Adding a new activity type
 
@@ -148,8 +154,10 @@ Pnpm monorepo with three packages:
 
 ## AI image generation notes
 
-- `fal.ai` is used for icon generation
-- **Flux Canny** (img2img via edge detection) is the working model for uploaded reference photos — do not swap without testing
+- `fal.ai` is used for all image generation and processing
+- **Cutting worksheet — no photo:** Ideogram v3 generate-transparent (`fal-ai/ideogram/v3/generate-transparent`) produces a cartoon subject PNG with a transparent background
+- **Cutting worksheet — user photo:** birefnet/v2 (`fal-ai/birefnet/v2`) removes the background; subject is then normalised (crop + pad + resize) before outline tracing
+- **Maze worksheet icon:** Flux Canny (img2img via edge detection) used for uploaded reference photos; text-to-image fallback otherwise — do not swap without testing
 - Flux Schnell failed on obscure references; Ideogram v3 remix ignored style prompts
 - In-memory icon cache exists but does not persist across server restarts — R2/KV cache is the fix
 - Render free tier spins down after inactivity, which clears the in-memory icon cache on every wake

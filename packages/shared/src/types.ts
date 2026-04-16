@@ -7,14 +7,18 @@ export const DifficultyLevel = z.enum(['easy', 'medium', 'hard'])
 export type DifficultyLevel = z.infer<typeof DifficultyLevel>
 
 export const WorksheetSpec = z.object({
-  interest: z.string().min(1).max(100),
+  // Optional when referenceImageDataUrl is provided; required otherwise.
+  interest: z.string().max(100).default(''),
   activity: ActivityType,
   difficulty: DifficultyLevel.default('easy'),
   childName: z.string().max(50).optional(),
   // base64-encoded image data URI — e.g. "data:image/jpeg;base64,..."
-  // If provided, used directly as the center icon without any AI processing.
+  // When provided, interest becomes optional.
   referenceImageDataUrl: z.string().optional(),
-})
+}).refine(
+  (data) => data.interest.trim().length > 0 || !!data.referenceImageDataUrl,
+  { message: 'Interest is required when no reference photo is provided', path: ['interest'] },
+)
 export type WorksheetSpec = z.infer<typeof WorksheetSpec>
 
 export interface Icon {
