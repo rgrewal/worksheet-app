@@ -8,6 +8,28 @@ type Status = 'idle' | 'loading' | 'done' | 'error'
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition'
 const labelCls = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5'
 
+function splitWordSearchWords(value: string) {
+  return value
+    .split(',')
+    .map(word => word.trim())
+    .filter(Boolean)
+}
+
+function mergeWordSearchWords(existing: string[], value: string) {
+  const seen = new Set(existing.map(word => word.toLowerCase()))
+  const words = [...existing]
+
+  for (const word of splitWordSearchWords(value)) {
+    const key = word.toLowerCase()
+    if (!seen.has(key)) {
+      seen.add(key)
+      words.push(word)
+    }
+  }
+
+  return words
+}
+
 export default function WorksheetForm() {
   const [interest, setInterest]               = useState('')
   const [activity, setActivity]               = useState<WorksheetSpec['activity']>('maze')
@@ -15,6 +37,8 @@ export default function WorksheetForm() {
   const [childName, setChildName]             = useState('')
   const [referenceImage, setReferenceImage]   = useState<string | null>(null)
   const [imageFileName, setImageFileName]     = useState<string>('')
+  const [wordSearchInput, setWordSearchInput] = useState('')
+  const [wordSearchWords, setWordSearchWords] = useState<string[]>([])
   const [status, setStatus]                   = useState<Status>('idle')
   const [pdfUrl, setPdfUrl]                   = useState<string | null>(null)
   const [errorMsg, setErrorMsg]               = useState('')
@@ -39,13 +63,57 @@ export default function WorksheetForm() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  function addWordSearchWords(value: string) {
+    setWordSearchWords(words => mergeWordSearchWords(words, value))
+  }
+
+  function removeWordSearchWord(wordToRemove: string) {
+    setWordSearchWords(words => words.filter(word => word !== wordToRemove))
+  }
+
+  function handleWordSearchInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value
+
+    if (!value.includes(',')) {
+      setWordSearchInput(value)
+      return
+    }
+
+    const parts = value.split(',')
+    addWordSearchWords(parts.slice(0, -1).join(','))
+    setWordSearchInput(parts[parts.length - 1] ?? '')
+  }
+
+  function handleWordSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      if (wordSearchInput.trim()) {
+        addWordSearchWords(wordSearchInput)
+        setWordSearchInput('')
+      }
+      return
+    }
+
+    if (e.key === 'Backspace' && !wordSearchInput && wordSearchWords.length > 0) {
+      setWordSearchWords(words => words.slice(0, -1))
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!interest.trim()) return
 
+    const submittedWordSearchWords = activity === 'word-search'
+      ? mergeWordSearchWords(wordSearchWords, wordSearchInput)
+      : []
+
+    if (activity === 'word-search' && submittedWordSearchWords.length === 0) return
+
     setStatus('loading')
     setPdfUrl(null)
     setErrorMsg('')
+    setWordSearchWords(submittedWordSearchWords)
+    setWordSearchInput('')
 
     try {
       const spec: WorksheetSpec = {
@@ -54,6 +122,7 @@ export default function WorksheetForm() {
         difficulty,
         ...(childName.trim() ? { childName: childName.trim() } : {}),
         ...(referenceImage ? { referenceImageDataUrl: referenceImage } : {}),
+        ...(activity === 'word-search' ? { wordSearchWords: submittedWordSearchWords } : {}),
       }
 
       const res = await fetch(`${API_URL}/generate`, {
@@ -78,6 +147,7 @@ export default function WorksheetForm() {
 
   const canSubmit = status !== 'loading'
     && (interest.trim().length > 0 || !!referenceImage)
+    && (activity !== 'word-search' || wordSearchWords.length > 0 || wordSearchInput.trim().length > 0)
 
   const interestPlaceholder = referenceImage
     ? 'e.g. Siren Head, Labubu, our dog Rex'
@@ -135,6 +205,7 @@ export default function WorksheetForm() {
                   {([
                     { value: 'maze',     label: 'Maze',     enabled: true },
                     { value: 'cutting',  label: 'Cutting',  enabled: true },
+                    { value: 'word-search', label: 'Word Search', enabled: true },
                     { value: 'counting', label: 'Counting', enabled: !import.meta.env.PROD },
                     { value: 'tracing',  label: 'Tracing',  enabled: !import.meta.env.PROD },
                     { value: 'matching', label: 'Matching', enabled: !import.meta.env.PROD },
@@ -156,6 +227,42 @@ export default function WorksheetForm() {
                 </select>
               </div>
             </div>
+
+            {activity === 'word-search' && (
+              <div>
+                <label className={labelCls}>Words</label>
+                <div className="flex min-h-[46px] w-full flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500">
+                  {wordSearchWords.map(word => (
+                    <span key={word} className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-1 text-sm text-indigo-700">
+                      {word}
+                      <button
+                        type="button"
+                        onClick={() => removeWordSearchWord(word)}
+                        className="text-indigo-400 hover:text-red-500"
+                        aria-label={`Remove ${word}`}
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={wordSearchInput}
+                    onChange={handleWordSearchInputChange}
+                    onKeyDown={handleWordSearchKeyDown}
+                    onBlur={() => {
+                      if (wordSearchInput.trim()) {
+                        addWordSearchWords(wordSearchInput)
+                        setWordSearchInput('')
+                      }
+                    }}
+                    placeholder={wordSearchWords.length ? 'Add another word' : 'e.g. cat, moon, robot'}
+                    className="min-w-[120px] flex-1 border-0 bg-transparent px-1 py-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">Separate words with commas.</p>
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>Reference photo <span className="normal-case font-normal text-gray-400 tracking-normal">(optional)</span></label>
