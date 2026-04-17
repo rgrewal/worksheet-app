@@ -3,7 +3,7 @@ import SVGtoPDF from 'svg-to-pdfkit'
 import sharp from 'sharp'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import type { WorksheetSpec, Icon } from '@worksheet/shared'
+import type { WorksheetSpec, Icon, WordSearchData } from '@worksheet/shared'
 import logger from '../lib/logger.js'
 import { getCornerImage } from './cornerImages.js'
 import type { CuttingOutlineResult } from './outline.js'
@@ -379,8 +379,100 @@ export async function buildCuttingPdf(opts: {
   })
 }
 
+export async function buildWordSearchPdf(opts: {
+  spec: WorksheetSpec
+  wordSearch: WordSearchData
+  activitySvg: string
+}): Promise<Buffer> {
+  const { spec, wordSearch, activitySvg } = opts
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      margin: 0,
+      info: {
+        Title: `${spec.interest} word search worksheet`,
+        Author: 'WorksheetApp',
+      },
+    })
+
+    const chunks: Uint8Array[] = []
+    doc.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.from(Buffer.concat(chunks))))
+    doc.on('error', reject)
+
+    let titleFont = 'Helvetica-Bold'
+    try {
+      doc.registerFont('Nunito-Bold', FONT_NUNITO)
+      titleFont = 'Nunito-Bold'
+    } catch {
+      // font file not found, Helvetica keeps things running
+    }
+
+    let cursor = MARGIN
+
+    const CORNER_SIZE = 44
+    const cornerSvg = getCornerImage(spec.interest)
+    SVGtoPDF(doc, cornerSvg, PAGE_W - MARGIN - CORNER_SIZE, 4, {
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+    })
+
+    const title = worksheetTitle(spec.childName, 'Word Search', spec.interest)
+
+    doc
+      .fontSize(22)
+      .font(titleFont)
+      .fillColor('#111111')
+      .text(title, MARGIN, cursor, { width: CONTENT_W, align: 'center' })
+
+    cursor += 32
+
+    doc
+      .fontSize(10)
+      .font('Helvetica')
+      .fillColor('#666666')
+      .text(`Find ${wordSearch.words.length} hidden words in the ${wordSearch.theme || 'personalized'} puzzle.`, MARGIN, cursor, {
+        width: CONTENT_W,
+        align: 'center',
+      })
+
+    cursor += 24
+
+    doc
+      .moveTo(MARGIN, cursor)
+      .lineTo(PAGE_W - MARGIN, cursor)
+      .lineWidth(1)
+      .strokeColor('#cccccc')
+      .stroke()
+
+    cursor += 18
+
+    const remainingH = PAGE_H - cursor - MARGIN - 12
+    SVGtoPDF(doc, activitySvg, MARGIN, cursor, {
+      width: CONTENT_W,
+      height: remainingH,
+      preserveAspectRatio: 'xMidYMin meet',
+    })
+
+    doc
+      .fontSize(8)
+      .font('Helvetica')
+      .fillColor('#aaaaaa')
+      .text('worksheetapp.com', MARGIN, PAGE_H - MARGIN + 8, {
+        width: CONTENT_W,
+        align: 'center',
+      })
+
+    doc.end()
+  })
+}
+
 function capitalise(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
+  return s
+    .split(/([\s-]+)/)
+    .map(part => /^[a-z]/i.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join('')
 }
 
 /** Builds the worksheet title. Omits the interest suffix when the string is blank. */

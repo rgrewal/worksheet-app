@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const ActivityType = z.enum(['maze', 'cutting', 'tracing', 'counting', 'matching'])
+export const ActivityType = z.enum(['maze', 'cutting', 'tracing', 'counting', 'matching', 'word-search'])
 export type ActivityType = z.infer<typeof ActivityType>
 
 export const DifficultyLevel = z.enum(['easy', 'medium', 'hard'])
@@ -15,9 +15,13 @@ export const WorksheetSpec = z.object({
   // base64-encoded image data URI — e.g. "data:image/jpeg;base64,..."
   // When provided, interest becomes optional.
   referenceImageDataUrl: z.string().optional(),
+  wordSearchWords: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
 }).refine(
   (data) => data.interest.trim().length > 0 || !!data.referenceImageDataUrl,
   { message: 'Interest is required when no reference photo is provided', path: ['interest'] },
+).refine(
+  (data) => data.activity !== 'word-search' || (data.wordSearchWords?.length ?? 0) > 0,
+  { message: 'Add at least one word for the word search', path: ['wordSearchWords'] },
 )
 export type WorksheetSpec = z.infer<typeof WorksheetSpec>
 
@@ -67,7 +71,14 @@ export interface CuttingData {
   patterns: Array<'straight' | 'zigzag' | 'wave'>
 }
 
-export type ActivityData = MazeData | CountingData | TracingData | MatchingData | CuttingData
+export interface WordSearchData {
+  size: number
+  grid: string[][]
+  words: string[]
+  theme: string
+}
+
+export type ActivityData = MazeData | CountingData | TracingData | MatchingData | CuttingData | WordSearchData
 
 export interface Worksheet {
   spec: WorksheetSpec

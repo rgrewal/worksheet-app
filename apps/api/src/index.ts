@@ -6,10 +6,11 @@ import { zValidator } from '@hono/zod-validator'
 import { WorksheetSpec } from '@worksheet/shared'
 import { generateMaze, mazeToSvg } from './services/maze.js'
 import { fetchOrGenerateIcon, type IconGenerationOptions } from './services/icons.js'
-import { buildPdf, buildCuttingPdf } from './services/pdf.js'
+import { buildPdf, buildCuttingPdf, buildWordSearchPdf } from './services/pdf.js'
 import { generateCuttingIcon } from './services/cuttingIcon.js'
 import { generateCuttingOutline } from './services/outline.js'
 import { prepareReferenceImageFromDataUrl } from './services/backgroundRemoval.js'
+import { generateWordSearch, wordSearchToSvg } from './services/wordSearch.js'
 import logger from './lib/logger.js'
 
 const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
@@ -82,6 +83,22 @@ app.post(
         return c.newResponse(new Uint8Array(pdfBytes), 200, {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="${pdfSlug(spec)}-cutting.pdf"`,
+          'Cache-Control': 'public, max-age=3600',
+        })
+      }
+
+      if (spec.activity === 'word-search') {
+        logger.info({ words: spec.wordSearchWords?.length ?? 0 }, 'word-search: generating puzzle')
+        const wordSearch = generateWordSearch(spec.wordSearchWords ?? [], spec.interest, spec.difficulty)
+        const activitySvg = wordSearchToSvg(wordSearch)
+
+        logger.info({ size: wordSearch.size, words: wordSearch.words.length }, 'word-search: rendering PDF')
+        const pdfBytes = await buildWordSearchPdf({ spec, wordSearch, activitySvg })
+        logger.info({ bytes: pdfBytes.length }, 'word-search: PDF complete')
+
+        return c.newResponse(new Uint8Array(pdfBytes), 200, {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${pdfSlug(spec)}-word-search.pdf"`,
           'Cache-Control': 'public, max-age=3600',
         })
       }

@@ -38,8 +38,25 @@ describe('WorksheetSpec', () => {
     }
   })
 
-  it.each(['maze', 'tracing', 'counting', 'matching'] as const)('accepts activity "%s"', (activity) => {
-    expect(WorksheetSpec.safeParse({ interest: 'trains', activity }).success).toBe(true)
+  it.each(['maze', 'tracing', 'counting', 'matching', 'word-search'] as const)('accepts activity "%s"', (activity) => {
+    const extra = activity === 'word-search' ? { wordSearchWords: ['cat'] } : {}
+    expect(WorksheetSpec.safeParse({ interest: 'trains', activity, ...extra }).success).toBe(true)
+  })
+
+  it('rejects a word search without words', () => {
+    expect(WorksheetSpec.safeParse({ interest: 'trains', activity: 'word-search' }).success).toBe(false)
+  })
+
+  it('passes through word search words', () => {
+    const result = WorksheetSpec.safeParse({
+      interest: 'space',
+      activity: 'word-search',
+      wordSearchWords: ['moon', 'rocket'],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.wordSearchWords).toEqual(['moon', 'rocket'])
+    }
   })
 
   it('rejects an invalid activity value', () => {
