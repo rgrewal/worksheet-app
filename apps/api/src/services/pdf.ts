@@ -383,8 +383,26 @@ export async function buildWordSearchPdf(opts: {
   spec: WorksheetSpec
   wordSearch: WordSearchData
   activitySvg: string
+  icon?: Icon
 }): Promise<Buffer> {
-  const { spec, wordSearch, activitySvg } = opts
+  const { spec, wordSearch, activitySvg, icon } = opts
+
+  // Resolve async work before opening the PDFKit stream
+  const pngBuffer = icon ? await resolveIconBuffer(icon) : null
+  const isSvgIcon = icon?.url.startsWith('data:image/svg+xml') ?? false
+
+  // Pre-compute image dimensions before opening the PDFKit stream
+  let imgW = 0
+  let imgH = 0
+  if (pngBuffer) {
+    try {
+      const meta = await sharp(pngBuffer).metadata()
+      imgW = meta.width ?? 0
+      imgH = meta.height ?? 0
+    } catch (err) {
+      logger.warn({ err }, 'buildWordSearchPdf: could not read image dimensions')
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -449,11 +467,32 @@ export async function buildWordSearchPdf(opts: {
     cursor += 18
 
     const remainingH = PAGE_H - cursor - MARGIN - 12
+
+    // ── Two-column layout when an image is available ───────────────────────
+    const IMG_COL_W = 150
+    const COL_GAP   = 16
+    const puzzleW   = pngBuffer ? CONTENT_W - IMG_COL_W - COL_GAP : CONTENT_W
+
     SVGtoPDF(doc, activitySvg, MARGIN, cursor, {
-      width: CONTENT_W,
+      width: puzzleW,
       height: remainingH,
       preserveAspectRatio: 'xMidYMin meet',
     })
+
+    if (icon) {
+      const colX = MARGIN + puzzleW + COL_GAP
+      if (isSvgIcon) {
+        const svgStr = Buffer.from(icon.url.split(',')[1], 'base64').toString('utf8')
+        SVGtoPDF(doc, svgStr, colX, cursor, { width: IMG_COL_W, height: remainingH, preserveAspectRatio: 'xMidYMid meet' })
+      } else if (pngBuffer && imgW > 0 && imgH > 0) {
+        const s     = Math.min(IMG_COL_W / imgW, remainingH / imgH)
+        const rendW = imgW * s
+        const rendH = imgH * s
+        const imgX  = colX + (IMG_COL_W - rendW) / 2
+        const imgY  = cursor + (remainingH - rendH) / 2
+        doc.image(pngBuffer, imgX, imgY, { width: rendW, height: rendH })
+      }
+    }
 
     doc
       .fontSize(8)

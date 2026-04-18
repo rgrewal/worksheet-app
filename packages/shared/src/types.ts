@@ -72,7 +72,8 @@ export interface CuttingData {
 }
 
 export interface WordSearchData {
-  size: number
+  cols: number
+  rows: number
   grid: string[][]
   words: string[]
   theme: string

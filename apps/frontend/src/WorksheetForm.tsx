@@ -215,11 +215,12 @@ export default function WorksheetForm() {
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Difficulty</label>
+                <label className={activity === 'word-search' ? `${labelCls} text-gray-400` : labelCls}>Difficulty</label>
                 <select
                   value={difficulty}
                   onChange={e => setDifficulty(e.target.value as WorksheetSpec['difficulty'])}
-                  className={inputCls}
+                  disabled={activity === 'word-search'}
+                  className={activity === 'word-search' ? `${inputCls} opacity-50 cursor-not-allowed` : inputCls}
                 >
                   {(['easy', 'medium', 'hard'] as const).map(d => (
                     <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
