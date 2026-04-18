@@ -5,6 +5,8 @@ type Position = { x: number; y: number }
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const MAX_GRID_SIZE = 32
+const MIN_COLS = 5
+const MIN_ROWS = 4
 
 const DIRECTIONS_BY_DIFFICULTY: Record<DifficultyLevel, Direction[]> = {
   easy: [
@@ -43,12 +45,12 @@ export function normaliseWordSearchWords(words: string[]): string[] {
   return normalised
 }
 
-export function gridSizeForWords(words: string[]): number {
-  const longest = Math.max(...words.map(word => word.length), 0)
-  const totalLetters = words.reduce((sum, word) => sum + word.length, 0)
-  const wordCountSize = 8 + Math.ceil(words.length * 0.85)
-  const densitySize = Math.ceil(Math.sqrt(totalLetters * 2.4))
-  return clamp(Math.max(longest + 2, wordCountSize, densitySize), 8, MAX_GRID_SIZE)
+export function gridDimensionsForWords(words: string[]): { cols: number; rows: number } {
+  const longest = Math.max(...words.map(w => w.length), 0)
+  const totalLetters = words.reduce((sum, w) => sum + w.length, 0)
+  const cols = clamp(Math.max(longest + 1, Math.ceil(Math.sqrt(totalLetters * 2.0))), MIN_COLS, MAX_GRID_SIZE)
+  const rows = clamp(Math.max(words.length + 2, Math.ceil(longest * 0.65), Math.ceil(totalLetters * 1.8 / cols)), MIN_ROWS, MAX_GRID_SIZE)
+  return { cols, rows }
 }
 
 export function generateWordSearch(words: string[], theme: string, difficulty: DifficultyLevel): WordSearchData {
@@ -58,20 +60,23 @@ export function generateWordSearch(words: string[], theme: string, difficulty: D
   }
 
   const sortedWords = [...normalised].sort((a, b) => b.length - a.length)
-  let size = gridSizeForWords(sortedWords)
+  let { cols, rows } = gridDimensionsForWords(sortedWords)
 
-  for (; size <= MAX_GRID_SIZE; size++) {
-    const grid = emptyGrid(size)
+  while (cols <= MAX_GRID_SIZE && rows <= MAX_GRID_SIZE) {
+    const grid = emptyGrid(cols, rows)
     if (tryPlaceWords(grid, sortedWords, difficulty)) {
-      fillEmptyCells(grid, theme, sortedWords)
+      fillEmptyCells(grid, cols, rows, theme, sortedWords)
 
       return {
-        size,
+        cols,
+        rows,
         grid: grid.map(row => row.map(cell => cell ?? randomLetter())),
         words: sortedWords,
         theme: theme.trim(),
       }
     }
+    cols++
+    rows++
   }
 
   throw new Error('Could not place all word search words')
@@ -80,20 +85,21 @@ export function generateWordSearch(words: string[], theme: string, difficulty: D
 export function wordSearchToSvg(wordSearch: WordSearchData): string {
   const CELL = 30
   const PAD = 18
-  const WORD_BANK_TOP = PAD + wordSearch.size * CELL + 42
+  const { cols, rows } = wordSearch
+  const WORD_BANK_TOP = PAD + rows * CELL + 42
   const WORD_BANK_COLS = wordSearch.words.length > 12 ? 3 : 2
   const WORD_BANK_COL_W = 170
   const WORD_BANK_ROWS = Math.ceil(wordSearch.words.length / WORD_BANK_COLS)
-  const W = Math.max(PAD * 2 + wordSearch.size * CELL, PAD * 2 + WORD_BANK_COLS * WORD_BANK_COL_W)
+  const W = Math.max(PAD * 2 + cols * CELL, PAD * 2 + WORD_BANK_COLS * WORD_BANK_COL_W)
   const H = WORD_BANK_TOP + WORD_BANK_ROWS * 24 + PAD
-  const OX = (W - wordSearch.size * CELL) / 2
+  const OX = (W - cols * CELL) / 2
   const OY = PAD
   const theme = escapeXml(wordSearch.theme || 'word search')
   const letters: string[] = []
   const wordBank: string[] = []
 
-  for (let y = 0; y < wordSearch.size; y++) {
-    for (let x = 0; x < wordSearch.size; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       const px = OX + x * CELL
       const py = OY + y * CELL
       const fill = (x + y) % 2 === 0 ? '#f8fafc' : '#ffffff'
@@ -128,10 +134,12 @@ function tryPlaceWords(grid: (string | null)[][], words: string[], difficulty: D
 
 function placeWord(grid: (string | null)[][], word: string, difficulty: DifficultyLevel): boolean {
   const directions = DIRECTIONS_BY_DIFFICULTY[difficulty]
+  const cols = grid[0].length
+  const rows = grid.length
 
   for (let attempt = 0; attempt < 400; attempt++) {
     const direction = directions[Math.floor(Math.random() * directions.length)]
-    const start = randomStart(grid.length)
+    const start = randomStart(cols, rows)
     if (!canPlaceWord(grid, word, start, direction)) continue
     writeWord(grid, word, start, direction)
     return true
@@ -143,7 +151,7 @@ function placeWord(grid: (string | null)[][], word: string, difficulty: Difficul
 function canPlaceWord(grid: (string | null)[][], word: string, start: Position, direction: Direction): boolean {
   const endX = start.x + direction.dx * (word.length - 1)
   const endY = start.y + direction.dy * (word.length - 1)
-  if (!inBounds(grid.length, endX, endY)) return false
+  if (!inBounds(grid[0].length, grid.length, endX, endY)) return false
 
   for (let i = 0; i < word.length; i++) {
     const x = start.x + direction.dx * i
@@ -163,13 +171,13 @@ function writeWord(grid: (string | null)[][], word: string, start: Position, dir
   }
 }
 
-function fillEmptyCells(grid: (string | null)[][], theme: string, words: string[]) {
+function fillEmptyCells(grid: (string | null)[][], cols: number, rows: number, theme: string, words: string[]) {
   const themeLetters = normaliseWordSearchWords([theme]).join('')
   const wordLetters = words.join('')
   const letterPool = `${themeLetters}${wordLetters}${ALPHABET}` || ALPHABET
 
-  for (let y = 0; y < grid.length; y++) {
-    for (let x = 0; x < grid.length; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (!grid[y][x]) {
         grid[y][x] = letterPool[Math.floor(Math.random() * letterPool.length)]
       }
@@ -177,19 +185,19 @@ function fillEmptyCells(grid: (string | null)[][], theme: string, words: string[
   }
 }
 
-function emptyGrid(size: number): (string | null)[][] {
-  return Array.from({ length: size }, () => Array.from({ length: size }, () => null))
+function emptyGrid(cols: number, rows: number): (string | null)[][] {
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => null))
 }
 
-function randomStart(size: number): Position {
+function randomStart(cols: number, rows: number): Position {
   return {
-    x: Math.floor(Math.random() * size),
-    y: Math.floor(Math.random() * size),
+    x: Math.floor(Math.random() * cols),
+    y: Math.floor(Math.random() * rows),
   }
 }
 
-function inBounds(size: number, x: number, y: number): boolean {
-  return x >= 0 && x < size && y >= 0 && y < size
+function inBounds(cols: number, rows: number, x: number, y: number): boolean {
+  return x >= 0 && x < cols && y >= 0 && y < rows
 }
 
 function randomLetter(): string {

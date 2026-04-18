@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   generateWordSearch,
-  gridSizeForWords,
+  gridDimensionsForWords,
   normaliseWordSearchWords,
   wordSearchToSvg,
 } from './wordSearch.js'
@@ -27,15 +27,21 @@ describe('normaliseWordSearchWords', () => {
   })
 })
 
-describe('gridSizeForWords', () => {
+describe('gridDimensionsForWords', () => {
   it('grows as more words are added', () => {
-    const few = gridSizeForWords(['CAT', 'DOG'])
-    const many = gridSizeForWords(['CAT', 'DOG', 'MOON', 'ROCKET', 'PLANET', 'STAR', 'COMET', 'ASTEROID'])
-    expect(many).toBeGreaterThan(few)
+    const few = gridDimensionsForWords(['CAT', 'DOG'])
+    const many = gridDimensionsForWords(['CAT', 'DOG', 'MOON', 'ROCKET', 'PLANET', 'STAR', 'COMET', 'ASTEROID'])
+    expect(many.cols * many.rows).toBeGreaterThan(few.cols * few.rows)
   })
 
-  it('is at least two cells larger than the longest word', () => {
-    expect(gridSizeForWords(['SUPERCALIFRAGILISTIC'])).toBeGreaterThanOrEqual(22)
+  it('cols are at least one cell larger than the longest word', () => {
+    expect(gridDimensionsForWords(['SUPERCALIFRAGILISTIC']).cols).toBeGreaterThanOrEqual(21)
+  })
+
+  it('produces a compact grid for a single short word', () => {
+    const { cols, rows } = gridDimensionsForWords(['IRONMAN'])
+    expect(cols).toBeLessThanOrEqual(9)
+    expect(rows).toBeLessThanOrEqual(7)
   })
 })
 
@@ -43,8 +49,8 @@ describe('generateWordSearch', () => {
   it('places every word in the generated grid', () => {
     const puzzle = generateWordSearch(['moon', 'rocket', 'star', 'planet'], 'space', 'hard')
 
-    expect(puzzle.grid).toHaveLength(puzzle.size)
-    puzzle.grid.forEach(row => expect(row).toHaveLength(puzzle.size))
+    expect(puzzle.grid).toHaveLength(puzzle.rows)
+    puzzle.grid.forEach(row => expect(row).toHaveLength(puzzle.cols))
 
     for (const word of puzzle.words) {
       expect(gridContainsWord(puzzle.grid, word)).toBe(true)
@@ -69,7 +75,7 @@ describe('wordSearchToSvg', () => {
 
 function gridContainsWord(grid: string[][], word: string): boolean {
   for (let y = 0; y < grid.length; y++) {
-    for (let x = 0; x < grid.length; x++) {
+    for (let x = 0; x < grid[0].length; x++) {
       for (const direction of DIRECTIONS) {
         if (matchesAt(grid, word, x, y, direction.dx, direction.dy)) return true
       }
@@ -82,7 +88,7 @@ function gridContainsWord(grid: string[][], word: string): boolean {
 function matchesAt(grid: string[][], word: string, x: number, y: number, dx: number, dy: number): boolean {
   const endX = x + dx * (word.length - 1)
   const endY = y + dy * (word.length - 1)
-  if (endX < 0 || endX >= grid.length || endY < 0 || endY >= grid.length) return false
+  if (endX < 0 || endX >= grid[0].length || endY < 0 || endY >= grid.length) return false
 
   for (let i = 0; i < word.length; i++) {
     if (grid[y + dy * i][x + dx * i] !== word[i]) return false

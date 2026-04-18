@@ -92,8 +92,12 @@ app.post(
         const wordSearch = generateWordSearch(spec.wordSearchWords ?? [], spec.interest, spec.difficulty)
         const activitySvg = wordSearchToSvg(wordSearch)
 
-        logger.info({ size: wordSearch.size, words: wordSearch.words.length }, 'word-search: rendering PDF')
-        const pdfBytes = await buildWordSearchPdf({ spec, wordSearch, activitySvg })
+        logger.info('word-search: resolving icon')
+        const icon = await fetchOrGenerateIcon(spec.interest, spec.referenceImageDataUrl)
+        logger.info({ iconCached: icon.cached, iconUrl: icon.url.slice(0, 80) }, 'word-search: icon resolved')
+
+        logger.info({ cols: wordSearch.cols, rows: wordSearch.rows, words: wordSearch.words.length }, 'word-search: rendering PDF')
+        const pdfBytes = await buildWordSearchPdf({ spec, wordSearch, activitySvg, icon })
         logger.info({ bytes: pdfBytes.length }, 'word-search: PDF complete')
 
         return c.newResponse(new Uint8Array(pdfBytes), 200, {
