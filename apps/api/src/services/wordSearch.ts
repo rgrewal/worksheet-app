@@ -2,6 +2,7 @@ import type { DifficultyLevel, WordSearchData } from '@worksheet/shared'
 
 type Direction = { dx: number; dy: number }
 type Position = { x: number; y: number }
+type Placement = { start: Position; direction: Direction }
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const MAX_GRID_SIZE = 32
@@ -48,8 +49,12 @@ export function normaliseWordSearchWords(words: string[]): string[] {
 export function gridDimensionsForWords(words: string[]): { cols: number; rows: number } {
   const longest = Math.max(...words.map(w => w.length), 0)
   const totalLetters = words.reduce((sum, w) => sum + w.length, 0)
-  const cols = clamp(Math.max(longest + 1, Math.ceil(Math.sqrt(totalLetters * 2.0))), MIN_COLS, MAX_GRID_SIZE)
-  const rows = clamp(Math.max(words.length + 2, Math.ceil(longest * 0.65), Math.ceil(totalLetters * 1.8 / cols)), MIN_ROWS, MAX_GRID_SIZE)
+  // ~25% of cells are shared via intersections; target ~55% fill density
+  const estimatedUniqueCells = Math.ceil(totalLetters * 0.75)
+  const targetArea = Math.ceil(estimatedUniqueCells / 0.55)
+  const side = Math.ceil(Math.sqrt(targetArea))
+  const cols = clamp(Math.max(longest + 1, side), MIN_COLS, MAX_GRID_SIZE)
+  const rows = clamp(Math.max(Math.ceil(longest * 0.8), side), MIN_ROWS, MAX_GRID_SIZE)
   return { cols, rows }
 }
 
@@ -87,8 +92,8 @@ export function wordSearchToSvg(wordSearch: WordSearchData): string {
   const PAD = 18
   const { cols, rows } = wordSearch
   const WORD_BANK_TOP = PAD + rows * CELL + 42
-  const WORD_BANK_COLS = wordSearch.words.length > 12 ? 3 : 2
-  const WORD_BANK_COL_W = 170
+  const WORD_BANK_COLS = wordSearch.words.length > 20 ? 4 : wordSearch.words.length > 12 ? 3 : 2
+  const WORD_BANK_COL_W = WORD_BANK_COLS >= 4 ? 150 : 170
   const WORD_BANK_ROWS = Math.ceil(wordSearch.words.length / WORD_BANK_COLS)
   const W = Math.max(PAD * 2 + cols * CELL, PAD * 2 + WORD_BANK_COLS * WORD_BANK_COL_W)
   const H = WORD_BANK_TOP + WORD_BANK_ROWS * 24 + PAD
@@ -137,7 +142,18 @@ function placeWord(grid: (string | null)[][], word: string, difficulty: Difficul
   const cols = grid[0].length
   const rows = grid.length
 
-  for (let attempt = 0; attempt < 400; attempt++) {
+  // Try intersection placements first to maximise letter sharing and grid density
+  const intersections = findIntersectionPlacements(grid, word, directions)
+  shuffle(intersections)
+  for (const { start, direction } of intersections) {
+    if (canPlaceWord(grid, word, start, direction)) {
+      writeWord(grid, word, start, direction)
+      return true
+    }
+  }
+
+  // Fall back to random placement
+  for (let attempt = 0; attempt < 300; attempt++) {
     const direction = directions[Math.floor(Math.random() * directions.length)]
     const start = randomStart(cols, rows)
     if (!canPlaceWord(grid, word, start, direction)) continue
@@ -148,7 +164,36 @@ function placeWord(grid: (string | null)[][], word: string, difficulty: Difficul
   return false
 }
 
+function findIntersectionPlacements(
+  grid: (string | null)[][],
+  word: string,
+  directions: Direction[]
+): Placement[] {
+  const placements: Placement[] = []
+
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[0].length; x++) {
+      const existing = grid[y][x]
+      if (!existing) continue
+
+      for (let i = 0; i < word.length; i++) {
+        if (word[i] !== existing) continue
+
+        for (const dir of directions) {
+          placements.push({
+            start: { x: x - dir.dx * i, y: y - dir.dy * i },
+            direction: dir,
+          })
+        }
+      }
+    }
+  }
+
+  return placements
+}
+
 function canPlaceWord(grid: (string | null)[][], word: string, start: Position, direction: Direction): boolean {
+  if (!inBounds(grid[0].length, grid.length, start.x, start.y)) return false
   const endX = start.x + direction.dx * (word.length - 1)
   const endY = start.y + direction.dy * (word.length - 1)
   if (!inBounds(grid[0].length, grid.length, endX, endY)) return false
@@ -202,6 +247,13 @@ function inBounds(cols: number, rows: number, x: number, y: number): boolean {
 
 function randomLetter(): string {
   return ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+}
+
+function shuffle<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {
