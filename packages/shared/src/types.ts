@@ -15,7 +15,7 @@ export const WorksheetSpec = z.object({
   // base64-encoded image data URI — e.g. "data:image/jpeg;base64,..."
   // When provided, interest becomes optional.
   referenceImageDataUrl: z.string().optional(),
-  wordSearchWords: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
+  wordSearchWords: z.array(z.string().trim().min(1).max(30)).max(30).optional(),
 }).refine(
   (data) => data.interest.trim().length > 0 || !!data.referenceImageDataUrl,
   { message: 'Interest is required when no reference photo is provided', path: ['interest'] },
