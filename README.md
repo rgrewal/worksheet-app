@@ -65,10 +65,10 @@ worksheet-app/
 │           │   ├── outline.ts           # Cutting outline: distance-transform contour tracer
 │           │   └── pdf.ts               # PDFKit worksheet builder
 │           └── scripts/
-│               ├── test-images/          # Input PNGs for debugging (gitignored output, .gitkeep tracked)
+│               ├── test-images/          # Input PNGs for the debug scripts (PNGs gitignored)
 │               ├── test-output/          # Artifacts written here (gitignored)
 │               ├── generateTestImage.ts  # Fetch a real AI image into test-images/
-│               └── testOutline.ts        # Step-by-step outline pipeline debugger
+│               └── testOutline.ts        # Step-by-step debugger for the original sharp + potrace outline
 └── packages/
     └── shared/
         └── src/
@@ -97,9 +97,13 @@ Requires `FAL_API_KEY` to be set in `apps/api/.env`. The image is saved as `test
 
 **How it works:** calls `fal-ai/ideogram/v3/generate-transparent` with `style_type: GENERAL`, `magic_prompt: OFF`, and `rendering_speed: QUALITY` — the same settings as `services/cuttingIcon.ts`. The image URL returned by Ideogram is fetched and written to disk with no post-processing, so what you see in `test-images/` is exactly what the outline pipeline receives.
 
-### Cutting outline pipeline (`testOutline.ts`)
+### Original outline approach (`testOutline.ts`)
 
-Runs the cutting-worksheet outline pipeline step-by-step against a folder of test images and saves every intermediate artifact so you can see exactly where it breaks.
+Runs the first version of the cutting outline (sharp `threshold` → sharp `dilate` → potrace) step by step against every PNG in `test-images/`, at all three difficulty levels. Every intermediate mask is written to `test-output/`, plus a `{image}-{difficulty}-6-composite.png` that overlays the traced cut line in red on the original image.
+
+This is not the production pipeline: `services/outline.ts` replaced this approach with a distance-transform contour tracer. The script is kept for reference, which is why `potrace` remains a dev dependency.
+
+Note: on a white-on-black mask, sharp's `dilate()` shrinks the shape and `erode()` grows it — compare `{image}-2-threshold.png` with `{image}-{difficulty}-3-dilated.png`.
 
 ```bash
 # Drop transparent PNGs into the input folder
