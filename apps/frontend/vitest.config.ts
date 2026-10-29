@@ -4,6 +4,9 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __GIT_HASH__: JSON.stringify('test'),
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
