@@ -2,7 +2,11 @@ import { execSync } from 'child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
+// 'unknown' when building outside a git checkout
+let gitHash = 'unknown'
+try {
+  gitHash = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+} catch {}
 
 export default defineConfig({
   plugins: [react()],
