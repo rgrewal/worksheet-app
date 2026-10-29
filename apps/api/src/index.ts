@@ -13,7 +13,7 @@ import { prepareReferenceImageFromDataUrl } from './services/backgroundRemoval.j
 import { generateWordSearch, wordSearchToSvg } from './services/wordSearch.js'
 import logger from './lib/logger.js'
 
-const gitHash = execSync('git rev-parse --short HEAD').toString().trim()
+const gitHash = readGitHash()
 
 const app = new Hono()
 
@@ -153,6 +153,15 @@ app.post(
 function pdfSlug(spec: { interest: string; childName?: string }): string {
   const base = spec.interest.trim() || spec.childName?.trim() || 'worksheet'
   return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+/** Short commit hash for /health, or 'unknown' when not running from a git checkout. */
+function readGitHash(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  } catch {
+    return 'unknown'
+  }
 }
 
 export default app
