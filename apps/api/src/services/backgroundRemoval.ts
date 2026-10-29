@@ -106,7 +106,7 @@ async function removeBackground(imageBuffer: Buffer, mimeType: string): Promise<
 
   fal.config({ credentials: apiKey })
 
-  const blob     = new Blob([imageBuffer], { type: mimeType }) as unknown as globalThis.Blob
+  const blob     = new Blob([new Uint8Array(imageBuffer)], { type: mimeType }) as unknown as globalThis.Blob
   const imageUrl = await fal.storage.upload(blob)
   logger.debug({ imageUrl }, 'backgroundRemoval: uploaded to fal.ai storage')
 
