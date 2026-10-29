@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
-    "build": "pnpm --filter '@worksheet/shared' build && pnpm --parallel --filter './apps/*' build",
+    "build": "pnpm --parallel --filter './apps/*' build",
     "typecheck": "pnpm --recursive --parallel exec tsc --noEmit",
     "test": "pnpm -r run test",
     "test:api": "pnpm --filter @worksheet/api run test",
