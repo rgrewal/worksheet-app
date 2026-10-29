@@ -43,6 +43,7 @@ Thumbs.db
 
 # Debug script artifacts
 apps/api/src/scripts/test-output/
+apps/api/src/scripts/test-images/*.png
 
 # TypeScript
 *.tsbuildinfo
