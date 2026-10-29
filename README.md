@@ -78,8 +78,9 @@ worksheet-app/
 ## Adding a new activity type
 
 1. Add the generator in `apps/api/src/services/` (e.g. `tracing.ts`)
-2. Add a case to the `switch` in `apps/api/src/index.ts`
-3. The frontend activity buttons are driven by the `ActivityType` enum in `packages/shared/src/types.ts` — adding a value there automatically adds it to the UI
+2. Handle it in `apps/api/src/index.ts` — a case in the `switch` if it uses the standard `buildPdf` layout, or its own branch plus a builder in `services/pdf.ts` (like cutting and word search)
+3. Add the value to the `ActivityType` enum in `packages/shared/src/types.ts`
+4. Add it to the activity dropdown list in `apps/frontend/src/WorksheetForm.tsx` — the list is hardcoded there, with an `enabled` flag that hides unfinished activities in production
 
 ## Debug scripts
 
