@@ -6,6 +6,9 @@ dist/
 build/
 .output/
 
+# Test coverage reports (vitest --coverage)
+coverage/
+
 # Vite
 .vite/
 
