@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import type { WorksheetSpec } from '@worksheet/shared'
+import { WORD_SEARCH_DIFFICULTY, type WorksheetSpec } from '@worksheet/shared'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
@@ -44,6 +44,9 @@ export default function WorksheetForm() {
   const [errorMsg, setErrorMsg]               = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Word search uses a fixed level; `difficulty` keeps the user's choice for the other activities
+  const effectiveDifficulty = activity === 'word-search' ? WORD_SEARCH_DIFFICULTY : difficulty
 
   function loadFile(file: File) {
     setImageFileName(file.name)
@@ -119,7 +122,7 @@ export default function WorksheetForm() {
       const spec: WorksheetSpec = {
         interest: interest.trim(),
         activity,
-        difficulty,
+        difficulty: effectiveDifficulty,
         ...(childName.trim() ? { childName: childName.trim() } : {}),
         ...(referenceImage ? { referenceImageDataUrl: referenceImage } : {}),
         ...(activity === 'word-search' ? { wordSearchWords: submittedWordSearchWords } : {}),
@@ -217,7 +220,7 @@ export default function WorksheetForm() {
               <div>
                 <label className={activity === 'word-search' ? `${labelCls} text-gray-400` : labelCls}>Difficulty</label>
                 <select
-                  value={difficulty}
+                  value={effectiveDifficulty}
                   onChange={e => setDifficulty(e.target.value as WorksheetSpec['difficulty'])}
                   disabled={activity === 'word-search'}
                   className={activity === 'word-search' ? `${inputCls} opacity-50 cursor-not-allowed` : inputCls}

@@ -84,6 +84,29 @@ describe('WorksheetForm - API response states', () => {
     expect(await screen.findByText(/something broke/i)).toBeInTheDocument()
   })
 
+  it('word search always shows and submits the fixed difficulty', async () => {
+    const fetchMock = vi.fn(() => new Promise(() => {}))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<WorksheetForm />)
+    const [activitySelect, difficultySelect] = screen.getAllByRole('combobox')
+
+    await user.selectOptions(difficultySelect, 'hard')
+    await user.selectOptions(activitySelect, 'word-search')
+    expect(difficultySelect).toBeDisabled()
+    expect(difficultySelect).toHaveValue('easy')
+
+    await user.type(screen.getByPlaceholderText(/lawnmowers/i), 'space')
+    await user.type(screen.getByPlaceholderText(/cat, moon, robot/i), 'moon')
+    await user.click(screen.getByRole('button', { name: /make worksheet/i }))
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body.difficulty).toBe('easy')
+
+    // The user's choice is kept for the other activities
+    await user.selectOptions(activitySelect, 'maze')
+    expect(difficultySelect).toHaveValue('hard')
+  })
+
   it('shows Open PDF and Download links after successful generation', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
