@@ -102,7 +102,7 @@ Pnpm monorepo with three packages:
 - Server binds to `process.env.PORT ?? 3001` — Render injects `PORT` automatically
 - `FRONTEND_URL` in Render must have no trailing slash or CORS will fail
 - `apps/api/src/scripts/` is excluded in `apps/api/tsconfig.json`, so the debug scripts are neither built nor type-checked
-- Both apps run `git rev-parse --short HEAD` (the API at startup, the frontend at build time), so both need a git checkout
+- Both apps run `git rev-parse --short HEAD` (the API at startup, the frontend at build time) for the version label, and fall back to `unknown` outside a git checkout
 
 ## Known issues (fix before adding new features)
 
@@ -111,6 +111,16 @@ Pnpm monorepo with three packages:
 - Maze rendering quality needs improvement
 - ✅ Distorted output when users upload reference images for cutting worksheets — fixed via birefnet/v2 background removal + normalisation pipeline
 - ✅ `ICON_SIZE` bumped to `120` in `apps/api/src/services/pdf.ts`
+
+## Clean source export
+
+A shareable copy (no `.git`, agent files, dependencies, build output or secrets) is exported from the `contract-baseline` tag:
+
+```bash
+git archive --prefix=worksheet-app/ -o ../worksheet-app-clean.zip contract-baseline -- . ':!CLAUDE.md' ':!.claude'
+```
+
+`git archive` only includes tracked files, so `node_modules`, `dist`, `.env` and test images are left out automatically. To bring changes made in the copy back: `git switch -c contract-work contract-baseline`, rsync the copy over the repo (excluding `node_modules`, `dist`, `.env`), `git rm` anything deleted in the copy, then PR and merge into `main`.
 
 ## Adding a new activity type
 
