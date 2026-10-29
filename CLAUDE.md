@@ -102,7 +102,7 @@ Pnpm monorepo with three packages:
 - Server binds to `process.env.PORT ?? 3001` — Render injects `PORT` automatically
 - `FRONTEND_URL` in Render must have no trailing slash or CORS will fail
 - `apps/api/src/scripts/` is excluded in `apps/api/tsconfig.json`, so the debug scripts are neither built nor type-checked
-- Both apps run `git rev-parse --short HEAD` (the API at startup, the frontend at build time), so both need a git checkout
+- Both apps run `git rev-parse --short HEAD` (the API at startup, the frontend at build time) for the version label, and fall back to `unknown` outside a git checkout
 
 ## Known issues (fix before adding new features)
 
