@@ -6,6 +6,9 @@ export type ActivityType = z.infer<typeof ActivityType>
 export const DifficultyLevel = z.enum(['easy', 'medium', 'hard'])
 export type DifficultyLevel = z.infer<typeof DifficultyLevel>
 
+// Word search has no difficulty choice: the API ignores the requested level and uses this one.
+export const WORD_SEARCH_DIFFICULTY: DifficultyLevel = 'easy'
+
 export const WorksheetSpec = z.object({
   // Optional when referenceImageDataUrl is provided; required otherwise.
   interest: z.string().max(100).default(''),
