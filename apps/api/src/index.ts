@@ -3,7 +3,7 @@ import { execSync } from 'child_process'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { zValidator } from '@hono/zod-validator'
-import { WorksheetSpec } from '@worksheet/shared'
+import { WorksheetSpec, WORD_SEARCH_DIFFICULTY } from '@worksheet/shared'
 import { generateMaze, mazeToSvg } from './services/maze.js'
 import { fetchOrGenerateIcon, type IconGenerationOptions } from './services/icons.js'
 import { buildPdf, buildCuttingPdf, buildWordSearchPdf } from './services/pdf.js'
@@ -89,7 +89,7 @@ app.post(
 
       if (spec.activity === 'word-search') {
         logger.info({ words: spec.wordSearchWords?.length ?? 0 }, 'word-search: generating puzzle')
-        const wordSearch = generateWordSearch(spec.wordSearchWords ?? [], spec.interest, spec.difficulty)
+        const wordSearch = generateWordSearch(spec.wordSearchWords ?? [], spec.interest, WORD_SEARCH_DIFFICULTY)
         const activitySvg = wordSearchToSvg(wordSearch)
 
         logger.info('word-search: resolving icon')
