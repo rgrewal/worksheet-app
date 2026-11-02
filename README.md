@@ -7,7 +7,7 @@ Printable learning worksheets personalised to a child's interests.
 | Layer | Tech |
 |---|---|
 | Frontend | Vite + React + TypeScript + Tailwind |
-| API | Hono on Node (dev) / Cloudflare Workers (prod) |
+| API | Hono on Node (Render in production) |
 | PDF | PDFKit + svg-to-pdfkit |
 | Icons | fal.ai (Ideogram text-to-image + Birefnet background removal) with in-memory cache |
 | Shared types | Zod schemas in `packages/shared` |

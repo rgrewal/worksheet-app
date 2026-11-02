@@ -38,7 +38,7 @@ describe('generateCuttingIcon - with FAL_API_KEY (default mode)', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://fal.run/fal-ai/ideogram/v3/generate-transparent')
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Key fake-key')
     expect(fetchMock.mock.calls[1][0]).toBe('https://fal.media/out.png')
-    expect(result.equals(png)).toBe(true)
+    expect(result.equals(new Uint8Array(png))).toBe(true)
   })
 
   it('propagates an Ideogram failure', async () => {
@@ -57,7 +57,7 @@ describe('generateCuttingIcon - offline mode', () => {
 
     const result = await generateCuttingIcon('dinosaur')
 
-    expect(result.equals(await getPlaceholderPng('cutting', 'system-generated'))).toBe(true)
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'system-generated')))).toBe(true)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -69,7 +69,7 @@ describe('generateCuttingIcon - offline mode', () => {
 
     const result = await generateCuttingIcon('dinosaur')
 
-    expect(result.equals(await getPlaceholderPng('cutting', 'system-generated'))).toBe(true)
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'system-generated')))).toBe(true)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
