@@ -52,3 +52,6 @@ apps/api/src/scripts/test-images/*.png
 *.tsbuildinfo
 # Endpoint timing reports written by the API test reporter
 apps/api/test-output/
+
+# Claude Code personal settings (per machine)
+.claude/settings.local.json
