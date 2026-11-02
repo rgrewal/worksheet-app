@@ -95,7 +95,7 @@ describe('growMask / shrinkMask', () => {
 
   it('radius 0 is a copy', async () => {
     const out = await growMask(square, 0)
-    expect(out.data.equals(square.data)).toBe(true)
+    expect(out.data.equals(new Uint8Array(square.data))).toBe(true)
     expect(out.data).not.toBe(square.data)
   })
 
@@ -108,7 +108,7 @@ describe('growMask / shrinkMask', () => {
 
   it('grow then shrink by the same radius restores a convex shape exactly', async () => {
     const out = await shrinkMask(await growMask(square, 7), 7)
-    expect(out.data.equals(square.data)).toBe(true)
+    expect(out.data.equals(new Uint8Array(square.data))).toBe(true)
   })
 })
 
@@ -122,7 +122,7 @@ describe('closeMask / openMask', () => {
 
   it('closeMask leaves a gap wider than 2·radius alone', async () => {
     const out = await closeMask(gapped, 2)
-    expect(out.data.equals(gapped.data)).toBe(true)
+    expect(out.data.equals(new Uint8Array(gapped.data))).toBe(true)
   })
 
   it('openMask removes a strand thinner than 2·radius', async () => {

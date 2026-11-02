@@ -231,7 +231,7 @@ describe('prepareReferenceImageFromDataUrl - offline mode', () => {
 
     const result = await prepareReferenceImageFromDataUrl(transparentDataUrl)
 
-    expect(result.equals(await getPlaceholderPng('cutting', 'user-uploaded'))).toBe(true)
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'user-uploaded')))).toBe(true)
     expect(mockFalUpload).not.toHaveBeenCalled()
     expect(mockFalSubscribe).not.toHaveBeenCalled()
   })
@@ -253,7 +253,7 @@ describe('prepareReferenceImageFromDataUrl - offline mode', () => {
     vi.stubEnv('FAL_API_KEY', 'real-looking-key')
 
     const result = await prepareReferenceImageFromDataUrl(transparentDataUrl)
-    expect(result.equals(await getPlaceholderPng('cutting', 'user-uploaded'))).toBe(true)
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'user-uploaded')))).toBe(true)
 
     await expect(prepareReferenceImageFromDataUrl(opaqueDataUrl)).rejects.toMatchObject({ status: 400 })
 
