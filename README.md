@@ -261,3 +261,7 @@ pnpm --filter @worksheet/frontend build
 # Build command: cd ../.. && pnpm install && pnpm --filter @worksheet/api build
 # Start command: node dist/index.js
 ```
+
+## License
+
+[MIT](LICENSE)
