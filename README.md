@@ -2,12 +2,26 @@
 
 Printable learning worksheets personalised to a child's interests.
 
+Type what a child is into (dinosaurs, fire trucks, a favourite cartoon), pick an activity, and the
+app returns a print-ready PDF built around it. It is for parents and teachers who want activity
+sheets a particular child will actually want to do. Today it makes mazes, word searches and
+cutting-practice sheets; the child's name (optional) goes in the title, and an uploaded photo can
+stand in for the generated picture.
+
+AI image generation (fal.ai) supplies the artwork. The puzzles, the cutting outline and the PDF
+layout are generated in code.
+
+**Live:** https://worksheet-app.pages.dev. The API is on Render's free tier, so the first request
+after a quiet spell can take 30–60 s while it wakes up.
+
+Planned work is listed in [ROADMAP.md](ROADMAP.md).
+
 ## Stack
 
 | Layer | Tech |
 |---|---|
 | Frontend | Vite + React + TypeScript + Tailwind |
-| API | Hono on Node (dev) / Cloudflare Workers (prod) |
+| API | Hono on Node (Render in production) |
 | PDF | PDFKit + svg-to-pdfkit |
 | Icons | fal.ai (Ideogram text-to-image + Birefnet background removal) with in-memory cache |
 | Shared types | Zod schemas in `packages/shared` |
