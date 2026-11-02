@@ -22,6 +22,8 @@ vi.mock('@fal-ai/client', () => ({
 
 // Import the service under test after the mock is registered
 import { prepareReferenceImageFromDataUrl } from './backgroundRemoval.js'
+import { getPlaceholderPng } from './placeholders.js'
+import { FalApiKeyMissingError, InvalidImageError } from '../lib/errors.js'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -130,9 +132,13 @@ describe('prepareReferenceImageFromDataUrl - image already has transparency', ()
 // ─── Opaque image (background removal needed) ────────────────────────────────
 
 describe('prepareReferenceImageFromDataUrl - background removal needed', () => {
-  it('throws if FAL_API_KEY is not set', async () => {
+  it('throws FalApiKeyMissingError ("FAL_API_KEY is not set") if FAL_API_KEY is not set', async () => {
+    vi.stubEnv('OFFLINE', '')
     vi.stubEnv('FAL_API_KEY', '')
-    await expect(prepareReferenceImageFromDataUrl(opaqueDataUrl)).rejects.toThrow(/FAL_API_KEY/)
+    await expect(prepareReferenceImageFromDataUrl(opaqueDataUrl)).rejects.toBeInstanceOf(FalApiKeyMissingError)
+    await expect(prepareReferenceImageFromDataUrl(opaqueDataUrl)).rejects.toThrow('FAL_API_KEY is not set')
+    expect(mockFalUpload).not.toHaveBeenCalled()
+    expect(mockFalSubscribe).not.toHaveBeenCalled()
   })
 
   it('calls fal.ai birefnet/v2 with the uploaded image URL', async () => {
@@ -213,5 +219,56 @@ describe('prepareReferenceImageFromDataUrl - MIME type handling', () => {
     await prepareReferenceImageFromDataUrl(jpegDataUrl)
     const uploadCall = (mockFalUpload as unknown as Mock).mock.calls[0]
     expect((uploadCall[0] as Blob).type).toBe('image/jpeg')
+  })
+})
+
+// ─── Offline mode ─────────────────────────────────────────────────────────────
+
+describe('prepareReferenceImageFromDataUrl - offline mode', () => {
+  it('returns the "cutting user uploaded" placeholder for a transparent upload', async () => {
+    vi.stubEnv('OFFLINE', '1')
+    vi.stubEnv('FAL_API_KEY', '')
+
+    const result = await prepareReferenceImageFromDataUrl(transparentDataUrl)
+
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'user-uploaded')))).toBe(true)
+    expect(mockFalUpload).not.toHaveBeenCalled()
+    expect(mockFalSubscribe).not.toHaveBeenCalled()
+  })
+
+  it('rejects an upload without a transparent background with a 400 InvalidImageError', async () => {
+    vi.stubEnv('OFFLINE', '1')
+    vi.stubEnv('FAL_API_KEY', '')
+
+    const promise = prepareReferenceImageFromDataUrl(opaqueDataUrl)
+    await expect(promise).rejects.toBeInstanceOf(InvalidImageError)
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrow(/transparent background/)
+    expect(mockFalUpload).not.toHaveBeenCalled()
+    expect(mockFalSubscribe).not.toHaveBeenCalled()
+  })
+
+  it('behaves identically when a FAL_API_KEY is set: still no fal.ai call, same placeholder / same 400', async () => {
+    vi.stubEnv('OFFLINE', '1')
+    vi.stubEnv('FAL_API_KEY', 'real-looking-key')
+
+    const result = await prepareReferenceImageFromDataUrl(transparentDataUrl)
+    expect(result.equals(new Uint8Array(await getPlaceholderPng('cutting', 'user-uploaded')))).toBe(true)
+
+    await expect(prepareReferenceImageFromDataUrl(opaqueDataUrl)).rejects.toMatchObject({ status: 400 })
+
+    expect(mockFalConfig).not.toHaveBeenCalled()
+    expect(mockFalUpload).not.toHaveBeenCalled()
+    expect(mockFalSubscribe).not.toHaveBeenCalled()
+  })
+
+  it('rejects a JPEG upload (never has alpha) with a 400', async () => {
+    vi.stubEnv('OFFLINE', '1')
+    const jpeg = await sharp({ create: { width: 80, height: 80, channels: 3, background: { r: 10, g: 20, b: 30 } } })
+      .jpeg()
+      .toBuffer()
+    const jpegDataUrl = `data:image/jpeg;base64,${jpeg.toString('base64')}`
+
+    await expect(prepareReferenceImageFromDataUrl(jpegDataUrl)).rejects.toMatchObject({ status: 400 })
   })
 })

@@ -1,6 +1,10 @@
 import sharp from 'sharp'
 import { fal } from '@fal-ai/client'
 import logger from '../lib/logger.js'
+import { isOfflineMode } from '../lib/offline.js'
+import { requireFalApiKey } from '../lib/fal.js'
+import { InvalidImageError } from '../lib/errors.js'
+import { getPlaceholderPng } from './placeholders.js'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -27,6 +31,10 @@ type AlphaBounds = { left: number; top: number; width: number; height: number }
  * if the image doesn't already have meaningful transparency, then crops to
  * the subject bounding box and adds padding.  Returns a transparent-background
  * PNG buffer ready for cutting-outline tracing.
+ *
+ * Offline mode cannot remove backgrounds, so it only accepts uploads that are
+ * already transparent (anything else is a 400) and then substitutes the
+ * "cutting user uploaded" placeholder for the photo.
  */
 export async function prepareReferenceImageFromDataUrl(dataUrl: string): Promise<Buffer> {
   const commaIdx = dataUrl.indexOf(',')
@@ -39,6 +47,18 @@ export async function prepareReferenceImageFromDataUrl(dataUrl: string): Promise
   const imageBuffer = Buffer.from(b64, 'base64')
 
   logger.info({ mimeType, byteLength: imageBuffer.length }, 'backgroundRemoval: starting')
+
+  if (isOfflineMode()) {
+    if (!(await hasMeaningfulTransparency(imageBuffer))) {
+      logger.warn('backgroundRemoval: offline mode — rejecting upload without a transparent background')
+      throw new InvalidImageError(
+        'Offline mode requires a cutting image with a transparent background',
+        'Background removal needs fal.ai, which is unavailable in offline mode. Upload a PNG with a transparent background instead.',
+      )
+    }
+    logger.info('backgroundRemoval: offline mode — upload is transparent, using placeholder')
+    return getPlaceholderPng('cutting', 'user-uploaded')
+  }
 
   if (await hasMeaningfulTransparency(imageBuffer)) {
     logger.info('backgroundRemoval: image already transparent — skipping fal.ai')
@@ -101,8 +121,7 @@ async function hasMeaningfulTransparency(imageBuffer: Buffer): Promise<boolean> 
 // ─── Background removal ───────────────────────────────────────────────────────
 
 async function removeBackground(imageBuffer: Buffer, mimeType: string): Promise<Buffer> {
-  const apiKey = process.env.FAL_API_KEY
-  if (!apiKey) throw new Error('FAL_API_KEY is required for background removal')
+  const apiKey = requireFalApiKey()
 
   fal.config({ credentials: apiKey })
 

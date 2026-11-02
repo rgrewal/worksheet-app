@@ -71,23 +71,34 @@ const LEVELS: Record<DifficultyLevel, LevelConfig> = {
 const ALPHA_THRESHOLD = 16
 const DISTANCE_INFINITY = 1e20
 
+/**
+ * Longest edge of the mask the raster stages work on. Everything here is
+ * O(pixels) (three distance transforms, two flood fills, contour tracing), so
+ * a 1024 px image costs ~4× a 512 px one. The contour is simplified to
+ * 5–18 px (scaled) anyway, and the dashed cut line is 5–7 px wide, so working
+ * at 512 px loses nothing visible in print. Path coordinates and stroke sizes
+ * are scaled back to source-image pixels before returning.
+ */
+const MAX_WORKING_PX = 512
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 export async function generateCuttingOutline(
   pngBuffer: Buffer,
   difficulty: DifficultyLevel,
 ): Promise<CuttingOutlineResult> {
-  const { data, info } = await sharp(pngBuffer)
-    .extractChannel('alpha')
-    .raw()
-    .toBuffer({ resolveWithObject: true })
+  const src = await loadWorkingAlpha(pngBuffer)
+  const { alpha, toSource } = src
+  const width  = src.workingWidth
+  const height = src.workingHeight
 
-  const { width, height } = info
-  const sourceAlpha = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-
-  // Scale level parameters proportionally to image size (calibrated for 1024 px)
-  const imageScale = Math.max(0.25, Math.min(width, height) / 1024)
-  const level = scaleLevel(LEVELS[difficulty], imageScale)
+  // Level parameters are calibrated for a 1024 px image. `sourceScale` adapts
+  // them to this image; the mask stages use the same values expressed in
+  // working pixels, so the margin is the same fraction of the image whether or
+  // not the mask was downsampled.
+  const sourceScale  = Math.max(0.25, Math.min(src.width, src.height) / 1024)
+  const workingScale = sourceScale / toSource
+  const level = scaleLevel(LEVELS[difficulty], workingScale)
 
   const padding =
     level.scaledMarginPx + level.scaledGapClosePx + level.scaledStrokePx + 24
@@ -95,7 +106,7 @@ export async function generateCuttingOutline(
   const workingWidth  = width  + padding * 2
   const workingHeight = height + padding * 2
 
-  const rawMask        = maskFromAlpha(sourceAlpha, ALPHA_THRESHOLD)
+  const rawMask        = maskFromAlpha(alpha, ALPHA_THRESHOLD)
   const paddedMask     = padMask(rawMask, width, height, padding)
   const minArea        = Math.max(20, Math.round(width * height * 0.00005))
   const cleanedBase    = removeSmallComponents(paddedMask, workingWidth, workingHeight, minArea)
@@ -110,23 +121,73 @@ export async function generateCuttingOutline(
     throw new Error('generateCuttingOutline: could not create a cut contour')
   }
 
-  // Shift contours from padded-image space back to original-image space
+  // Shift contours from padded-working space back to source-image pixels
   const imageSpaceContours = contours.map((c) =>
-    c.map((p) => ({ x: p.x - padding, y: p.y - padding })),
+    c.map((p) => ({ x: (p.x - padding) * toSource, y: (p.y - padding) * toSource })),
   )
 
   const pathData = imageSpaceContours.map(contourToPathData).join(' ')
 
   logger.debug(
-    { difficulty, contours: contours.length, pathDataLength: pathData.length },
+    {
+      difficulty,
+      source: `${src.width}×${src.height}`,
+      working: `${width}×${height}`,
+      contours: contours.length,
+      pathDataLength: pathData.length,
+    },
     'generateCuttingOutline: done',
   )
 
+  // Stroke geometry is in source pixels, computed from the source scale
+  // directly so working-resolution rounding does not leak into the PDF.
+  const base = LEVELS[difficulty]
   return {
     pathData,
-    strokePx: level.scaledStrokePx,
-    dash: Math.round(level.dash * imageScale),
-    gap: Math.round(level.gap * imageScale),
+    strokePx: Math.max(1, Math.round(base.strokePx * sourceScale)),
+    dash:     Math.max(1, Math.round(base.dash     * sourceScale)),
+    gap:      Math.max(1, Math.round(base.gap      * sourceScale)),
+  }
+}
+
+// ─── Alpha loading at working resolution ─────────────────────────────────────
+
+interface WorkingAlpha {
+  /** Source image size */
+  width: number
+  height: number
+  /** Size the raster stages run at (≤ MAX_WORKING_PX on the longest edge) */
+  workingWidth: number
+  workingHeight: number
+  /** Multiply working-space coordinates by this to get source pixels */
+  toSource: number
+  /** Alpha channel at working resolution */
+  alpha: Uint8Array
+}
+
+async function loadWorkingAlpha(pngBuffer: Buffer): Promise<WorkingAlpha> {
+  const meta = await sharp(pngBuffer).metadata()
+  const width  = meta.width  ?? 0
+  const height = meta.height ?? 0
+  if (width === 0 || height === 0) throw new Error('generateCuttingOutline: could not read image size')
+
+  const downscale     = Math.min(1, MAX_WORKING_PX / Math.max(width, height))
+  const workingWidth  = Math.max(1, Math.round(width  * downscale))
+  const workingHeight = Math.max(1, Math.round(height * downscale))
+
+  let pipeline = sharp(pngBuffer).ensureAlpha().extractChannel('alpha')
+  if (downscale < 1) {
+    pipeline = pipeline.resize(workingWidth, workingHeight, { fit: 'fill', kernel: 'lanczos3' })
+  }
+  const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true })
+
+  return {
+    width,
+    height,
+    workingWidth:  info.width,
+    workingHeight: info.height,
+    toSource: width / info.width,
+    alpha: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
   }
 }
 
