@@ -1,8 +1,14 @@
 import sharp from 'sharp'
 import type { Icon } from '@worksheet/shared'
 import logger from '../lib/logger.js'
+import { isOfflineMode } from '../lib/offline.js'
+import { requireFalApiKey } from '../lib/fal.js'
+import { getPlaceholderDataUrl, placeholderSourceFor } from './placeholders.js'
 
 const memoryCache = new Map<string, string>()
+
+/** Worksheets that embed an icon resolved by this service. Selects the offline placeholder. */
+export type IconWorkflow = 'maze' | 'word-search'
 
 export interface IconGenerationOptions {
   prompt?: string
@@ -18,18 +24,34 @@ export interface IconGenerationOptions {
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
+/**
+ * Resolves the icon for a worksheet.
+ *
+ *   offline mode          → the "<workflow> user uploaded / system generated" placeholder
+ *   reference photo given → the photo itself, no API call
+ *   otherwise             → cache → built-in → fal.ai text-to-image (requires FAL_API_KEY)
+ */
 export async function fetchOrGenerateIcon(
+  workflow: IconWorkflow,
   interest: string,
   referenceImageDataUrl?: string,
   options?: IconGenerationOptions,
 ): Promise<Icon> {
+  const base = normalise(interest)
+
+  if (isOfflineMode()) {
+    const source = placeholderSourceFor(referenceImageDataUrl)
+    logger.info({ workflow, source, interest: base }, 'icons: offline mode — using placeholder')
+    const url = await getPlaceholderDataUrl(workflow, source)
+    return { url, label: base, cached: false }
+  }
+
   if (referenceImageDataUrl) {
     logger.info({ interest, refByteLength: referenceImageDataUrl.length }, 'icons: using reference image directly as icon')
     return { url: referenceImageDataUrl, label: interest, cached: false }
   }
 
-  const base = normalise(interest)
-  const key  = options?.cacheKeySuffix ? `${base}:${options.cacheKeySuffix}` : base
+  const key = options?.cacheKeySuffix ? `${base}:${options.cacheKeySuffix}` : base
 
   const cached = memoryCache.get(key)
   if (cached) {
@@ -52,12 +74,13 @@ export async function fetchOrGenerateIcon(
 
 // ─── Text-to-image ────────────────────────────────────────────────────────────
 
+/**
+ * Calls Ideogram via fal.ai. Throws FalApiKeyMissingError when no key is set
+ * and propagates any API failure — the route turns both into a 500 rather
+ * than silently shipping a worksheet with a stand-in icon.
+ */
 async function generateIconWithText(interest: string, options?: IconGenerationOptions): Promise<string> {
-  const apiKey = process.env.FAL_API_KEY
-  if (!apiKey) {
-    logger.warn('icons: FAL_API_KEY not set — using placeholder')
-    return placeholderSvg(interest)
-  }
+  const apiKey = requireFalApiKey()
 
   const prompt = options?.prompt ??
     `Simple black and white line drawing of a ${interest}, ` +
@@ -78,35 +101,30 @@ async function generateIconWithText(interest: string, options?: IconGenerationOp
   if (options?.negativePrompt) body.negative_prompt = options.negativePrompt
   if (options?.magicPrompt === false) body.magic_prompt_option = 'OFF'
 
-  try {
-    logger.info({ interest, endpoint }, 'icons: starting text-to-image job')
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
+  logger.info({ interest, endpoint }, 'icons: starting text-to-image job')
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
 
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Ideogram ${res.status}: ${text}`)
-    }
-
-    const data = await res.json() as { images: { url: string }[] }
-    const generatedUrl = data.images[0].url
-    logger.info({ generatedUrl }, 'icons: text-to-image response received')
-
-    if (useTransparent) {
-      return await trimTransparentBorders(generatedUrl)
-    }
-
-    return generatedUrl
-  } catch (err) {
-    logger.error({ err }, 'icons: text-to-image failed')
-    return placeholderSvg(interest)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Ideogram ${res.status}: ${text}`)
   }
+
+  const data = await res.json() as { images: { url: string }[] }
+  const generatedUrl = data.images[0].url
+  logger.info({ generatedUrl }, 'icons: text-to-image response received')
+
+  if (useTransparent) {
+    return await trimTransparentBorders(generatedUrl)
+  }
+
+  return generatedUrl
 }
 
 // ─── Trim transparent borders from a transparent PNG ─────────────────────────
@@ -129,16 +147,6 @@ async function trimTransparentBorders(imageUrl: string): Promise<string> {
 
 function normalise(interest: string): string {
   return interest.trim().toLowerCase().replace(/\s+/g, '-')
-}
-
-function placeholderSvg(label: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-    <rect width="200" height="200" fill="white"/>
-    <rect x="10" y="10" width="180" height="180" rx="8" fill="none" stroke="black" stroke-width="3" stroke-dasharray="8 4"/>
-    <text x="100" y="95" font-family="sans-serif" font-size="14" text-anchor="middle" fill="black">${label}</text>
-    <text x="100" y="115" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#666">(icon placeholder)</text>
-  </svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 const BUILTIN_ICONS: Record<string, string> = {}

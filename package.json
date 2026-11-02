@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:offline": "OFFLINE=1 pnpm --parallel --filter './apps/*' dev",
     "build": "pnpm --parallel --filter './apps/*' build",
     "typecheck": "pnpm --recursive --parallel exec tsc --noEmit",
     "test": "pnpm -r run test",

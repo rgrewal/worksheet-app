@@ -13,10 +13,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import potrace from 'potrace'
+import { growMask, shrinkMask } from '../services/morphology.js'
 
 // ── Pipeline parameters — tweak and re-run ────────────────────────────────────
-const DILATE = { easy: 28, medium: 14, hard: 1 }  // controls margin + gap-fill; less = more detail on hard
-const ERODE = 0        // set to 0 to skip
+// GROW/SHRINK are applied via services/morphology.ts, which wraps sharp's
+// dilate()/erode() correctly: sharp treats DARK pixels as the foreground, so on
+// this white-subject mask its dilate() shrinks and its erode() grows. An earlier
+// version of this script called sharp.dilate() directly and so cut 28 px INSIDE
+// the subject on "easy".
+const GROW = { easy: 28, medium: 14, hard: 1 }   // margin + gap-fill; less = more detail on hard
+const SHRINK = 0       // applied after GROW; set to 0 to skip
 const TURD_SIZE = 5
 const OPT_TOLERANCE = { easy: 0.25, medium: 0.12, hard: 0.03 } as const
 const CONCAVE_CLOSE = { easy: 20, medium: 6, hard: 0 } as const
@@ -382,34 +388,29 @@ async function processImage(
 
   // Steps 3-6: per difficulty. Dilation varies, so everything downstream is per-difficulty.
   for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
-    const dilate = DILATE[difficulty]
+    const grow = GROW[difficulty]
     const optTolerance = OPT_TOLERANCE[difficulty]
 
-    // Step 3: dilate (and optional erode)
+    // Step 3: grow the subject (and optionally shrink it back)
     let dilatedData: Buffer
     let dilatedInfo: sharp.OutputInfo
     try {
-      let pipeline = sharp(threshData, {
-        raw: { width: threshInfo.width, height: threshInfo.height, channels: 1 },
-      }).dilate(dilate)
-
-      if (ERODE > 0) {
-        pipeline = pipeline.erode(ERODE)
-        log(`  [3/${difficulty}] dilate(${dilate}) + erode(${ERODE}) → ${name}-${difficulty}-3-dilated.png`)
+      let mask = await growMask({ data: threshData, width: threshInfo.width, height: threshInfo.height }, grow)
+      if (SHRINK > 0) {
+        mask = await shrinkMask(mask, SHRINK)
+        log(`  [3/${difficulty}] grow(${grow}) + shrink(${SHRINK}) → ${name}-${difficulty}-3-dilated.png`)
       } else {
-        log(`  [3/${difficulty}] dilate(${dilate}) → ${name}-${difficulty}-3-dilated.png`)
+        log(`  [3/${difficulty}] grow(${grow}) → ${name}-${difficulty}-3-dilated.png`)
       }
 
-      const result = await pipeline.grayscale().raw().toBuffer({ resolveWithObject: true })
-      dilatedData = result.data
-      dilatedInfo = result.info
+      dilatedData = mask.data
+      dilatedInfo = { ...threshInfo, width: mask.width, height: mask.height, channels: 1 }
 
       await sharp(dilatedData, {
-        raw: { width: dilatedInfo.width, height: dilatedInfo.height, channels: dilatedInfo.channels },
+        raw: { width: dilatedInfo.width, height: dilatedInfo.height, channels: 1 },
       })
         .png()
         .toFile(out(`-${difficulty}-3-dilated.png`))
-
 
       const outsideOnlyData = fillEnclosedHoles(dilatedData, dilatedInfo.width, dilatedInfo.height)
       await sharp(outsideOnlyData, {
@@ -481,7 +482,7 @@ async function processImage(
       fs.writeFileSync(svgPath, svg)
 
       const hasPath = /<path/.test(svg) && svg.match(/<path[^>]*\sd="([^"]+)"/)
-      log(`  [5/${difficulty}] potrace (dilate=${dilate} optTolerance=${optTolerance}) → ${name}-${difficulty}-5-potrace.svg${hasPath ? '' : ' ⚠ NO PATH'}`)
+      log(`  [5/${difficulty}] potrace (grow=${grow} optTolerance=${optTolerance}) → ${name}-${difficulty}-5-potrace.svg${hasPath ? '' : ' ⚠ NO PATH'}`)
       passed.push(`${name} step 5/${difficulty}`)
     } catch (err) {
       log(`  [5/${difficulty}] FAILED: ${(err as Error).message}`)
@@ -503,7 +504,7 @@ async function processImage(
     // Steps 6b & 6c (easy only): rect and ellipse composites as alternative easy cut lines
     if (difficulty === 'easy' && bbox) {
       try {
-        await makeRectComposite(originalPng, bbox, DILATE.easy, out('-easy-6b-rect.png'))
+        await makeRectComposite(originalPng, bbox, GROW.easy, out('-easy-6b-rect.png'))
         log(`  [6b/easy] rect composite → ${name}-easy-6b-rect.png`)
         passed.push(`${name} step 6b/easy`)
       } catch (err) {
@@ -512,7 +513,7 @@ async function processImage(
       }
 
       try {
-        await makeEllipseComposite(originalPng, bbox, DILATE.easy, out('-easy-6c-ellipse.png'))
+        await makeEllipseComposite(originalPng, bbox, GROW.easy, out('-easy-6c-ellipse.png'))
         log(`  [6c/easy] ellipse composite → ${name}-easy-6c-ellipse.png`)
         passed.push(`${name} step 6c/easy`)
       } catch (err) {
@@ -529,7 +530,7 @@ async function processImage(
 
 async function main() {
   log('testOutline.ts — cutting outline pipeline debugger')
-  log(`Parameters: DILATE easy=${DILATE.easy} medium=${DILATE.medium} hard=${DILATE.hard} | ERODE=${ERODE} TURD_SIZE=${TURD_SIZE}`)
+  log(`Parameters: GROW easy=${GROW.easy} medium=${GROW.medium} hard=${GROW.hard} | SHRINK=${SHRINK} TURD_SIZE=${TURD_SIZE}`)
   log(`OPT_TOLERANCE: easy=${OPT_TOLERANCE.easy} medium=${OPT_TOLERANCE.medium} hard=${OPT_TOLERANCE.hard}`)
   log(`Input:  ${INPUT_DIR}`)
   log(`Output: ${OUTPUT_DIR}`)

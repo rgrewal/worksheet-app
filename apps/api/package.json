@@ -4,11 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && cp -r src/fonts dist/fonts",
+    "dev:offline": "OFFLINE=1 tsx watch src/index.ts",
+    "build": "tsc && cp -r src/fonts dist/fonts && cp -r src/assets dist/assets",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:timing": "vitest run --no-file-parallelism src/app.test.ts",
+    "outline:gallery": "tsx src/scripts/outlineGallery.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.9.5",
