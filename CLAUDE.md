@@ -6,6 +6,8 @@ This file provides guidance to Claude Code when working with this repository. It
 
 **worksheet-app** generates personalized printable learning worksheets for children based on their interests. It is both a real product and a portfolio piece demonstrating AI/LLM integration.
 
+- **Users: teachers and other educators**, who as a rule don't submit children's data. The name field is optional (a first name at most) and a reference photo shows the child's interest, never the child.
+
 - **Demo deadline: April 22, 2026 (passed)**
 - **Current priority: fix remaining known issues (UI, layout, maze rendering)**
 - **Stack was chosen deliberately new-to-author** to demonstrate modern JS/TS ecosystem learning
