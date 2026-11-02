@@ -1,8 +1,21 @@
 import logger from '../lib/logger.js'
+import { isOfflineMode } from '../lib/offline.js'
+import { requireFalApiKey } from '../lib/fal.js'
+import { getPlaceholderPng } from './placeholders.js'
 
+/**
+ * Generates the transparent-background subject for a cutting worksheet.
+ *
+ *   offline mode → the "cutting system generated" placeholder (circle on transparency)
+ *   otherwise    → Ideogram generate-transparent via fal.ai (requires FAL_API_KEY)
+ */
 export async function generateCuttingIcon(interest: string): Promise<Buffer> {
-  const apiKey = process.env.FAL_API_KEY
-  if (!apiKey) throw new Error('FAL_API_KEY is not set')
+  if (isOfflineMode()) {
+    logger.info({ interest }, 'cuttingIcon: offline mode — using placeholder')
+    return getPlaceholderPng('cutting', 'system-generated')
+  }
+
+  const apiKey = requireFalApiKey()
 
   const prompt =
     `a single ${interest} on a pure flat white background, bold black outline, ` +

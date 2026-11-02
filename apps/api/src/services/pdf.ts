@@ -78,6 +78,19 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
   const iconBuffer = await resolveIconBuffer(icon)
   const isSvgIcon  = icon.url.startsWith('data:image/svg+xml')
 
+  // Raster icon dimensions, so it can be fitted without stretching or cropping
+  let iconImgW = 0
+  let iconImgH = 0
+  if (iconBuffer) {
+    try {
+      const meta = await sharp(iconBuffer).metadata()
+      iconImgW = meta.width ?? 0
+      iconImgH = meta.height ?? 0
+    } catch (err) {
+      logger.warn({ err }, 'buildPdf: could not read icon dimensions — falling back to square')
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
@@ -210,14 +223,24 @@ export async function buildPdf(opts: BuildPdfOptions): Promise<Buffer> {
         }
 
         // ── Compute icon position ─────────────────────────────────────────
+        // The icon gets an ICON_SIZE × ICON_SIZE box below the label. A raster
+        // image is scaled uniformly to fit inside that box (never stretched or
+        // cropped) and centred within it, so a 4:3 photo ends up 120 × 90.
         const ICON_PAD    = 0.075
         const labelBottom = clearPdfY + 4 + finishSize + 4
 
-        const iconSize = ICON_SIZE
-        const iconRendW = iconSize
-        const iconRendH = iconSize
-        const iconX = clearPdfX + (clearPdfSize - iconSize) / 2
-        const iconY = Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
+        const boxX = clearPdfX + (clearPdfSize - ICON_SIZE) / 2
+        const boxY = Math.max(clearPdfY + clearPdfSize * ICON_PAD, labelBottom)
+
+        let iconRendW = ICON_SIZE
+        let iconRendH = ICON_SIZE
+        if (iconImgW > 0 && iconImgH > 0) {
+          const s = Math.min(ICON_SIZE / iconImgW, ICON_SIZE / iconImgH)
+          iconRendW = iconImgW * s
+          iconRendH = iconImgH * s
+        }
+        const iconX = boxX + (ICON_SIZE - iconRendW) / 2
+        const iconY = boxY + (ICON_SIZE - iconRendH) / 2
 
         logger.debug({ x: clearPdfX.toFixed(1), y: clearPdfY.toFixed(1), size: clearPdfSize.toFixed(1) }, 'pdf: clearing position')
 

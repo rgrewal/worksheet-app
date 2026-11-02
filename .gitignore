@@ -50,3 +50,5 @@ apps/api/src/scripts/test-images/*.png
 
 # TypeScript
 *.tsbuildinfo
+# Endpoint timing reports written by the API test reporter
+apps/api/test-output/
