@@ -1,0 +1,35 @@
+# Cloudflare Pages deploys main on its own but doesn't report a GitHub deployment.
+# This job waits until the live frontend serves the pushed commit (the footer
+# version label is baked into the JS bundle), so the "production" environment
+# and the repo's Deployments list show what is actually live.
+name: Record deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://worksheet-app.pages.dev
+    steps:
+      - name: Wait for Cloudflare Pages to serve this commit
+        run: |
+          short="${GITHUB_SHA::7}"
+          for i in $(seq 1 40); do
+            js=$(curl -fsS https://worksheet-app.pages.dev/ | grep -oE '/assets/[^"]+\.js' | head -1 || true)
+            if [ -n "$js" ] && curl -fsS "https://worksheet-app.pages.dev$js" | grep -q "$short"; then
+              echo "Frontend is serving $short"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Frontend still not serving $short after ~13 minutes"
+          exit 1
