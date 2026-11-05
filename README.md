@@ -2,13 +2,15 @@
 
 Printable learning worksheets personalised to a child's interests.
 
-Type what a child is into (dinosaurs, fire trucks, a favourite cartoon), pick an activity, and the
-app returns a print-ready PDF built around it. It is for teachers and other educators who want
-activity sheets a particular student will actually want to do. Today it makes mazes, word searches and
-cutting-practice sheets. The child's first name (optional) goes in the title, and a photo of the
-thing they're into (their own toy truck, say) can replace the generated picture. The app doesn't
-store or log the name or the photo; a photo used for a cutting sheet is sent to fal.ai to remove
-its background.
+Type what a child is into (dinosaurs, fire trucks, King Tut), pick an activity, and the app returns
+a print-ready PDF built around it. It is for teachers and other educational professionals,
+especially those working with neurodivergent children. Their special interests can be very niche,
+and a worksheet built around that interest is one a student will actually want to do.
+
+Today it makes mazes, word searches and cutting-practice sheets. The child's first name (optional)
+goes in the title, and a photo of the thing they're into (their own toy truck, say) can replace the
+generated picture. The app doesn't store or log the name or the photo; a photo used for a cutting
+sheet is sent to fal.ai to remove its background.
 
 AI image generation (fal.ai) supplies the artwork. The puzzles, the cutting outline and the PDF
 layout are generated in code.
