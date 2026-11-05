@@ -150,6 +150,12 @@ Pnpm monorepo with three packages:
 - Build command: `cd ../.. && pnpm install && pnpm --filter @worksheet/api build`
 - Start command: `node dist/index.js`
 - Instance type: Free (spins down after inactivity — first request may take 30–60s to wake)
+- Only redeploys when files under `apps/api` change; after a history rewrite it didn't redeploy at all, so use Manual Deploy → Deploy latest commit
+
+### GitHub deployment records
+Neither host reports deployments to GitHub, so two workflows in `.github/workflows/` record them once the live service serves the pushed code:
+- `record-deployment.yml` → `production` environment (frontend), on every push to `main`
+- `record-api-deployment.yml` → `api` environment, on pushes touching `apps/api` or `packages/shared`. A failed run means Render didn't redeploy (likely for a `packages/shared`-only change): deploy manually, then re-run the workflow
 
 ## Roadmap (ordered)
 
