@@ -1,0 +1,42 @@
+# Render deploys the API on its own but doesn't report a GitHub deployment, and it
+# only redeploys when files under apps/api (its root directory) change. So this
+# runs on pushes that touch the API's code, waits until the live /health reports
+# a commit whose apps/api and packages/shared match the pushed commit, and
+# records it under the "api" environment. Matching code rather than the commit
+# hash also accepts a manual deploy of an equivalent commit.
+name: Record API deployment
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/api/**', 'packages/shared/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: api
+      url: https://worksheet-app-f9kt.onrender.com/health
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Wait for Render to serve this commit's API code
+        run: |
+          want=$(git rev-parse "$GITHUB_SHA:apps/api" "$GITHUB_SHA:packages/shared")
+          for i in $(seq 1 40); do
+            live=$(curl -fsS --max-time 90 https://worksheet-app-f9kt.onrender.com/health | jq -r '.git // empty' || true)
+            if [ -n "$live" ] && have=$(git rev-parse "$live:apps/api" "$live:packages/shared" 2>/dev/null) && [ "$have" = "$want" ]; then
+              echo "API is serving $live, same API code as ${GITHUB_SHA::7}"
+              exit 0
+            fi
+            echo "API reports ${live:-nothing}; waiting"
+            sleep 30
+          done
+          echo "API still not serving this commit's code after ~20 minutes (Render may not have redeployed)"
+          exit 1
